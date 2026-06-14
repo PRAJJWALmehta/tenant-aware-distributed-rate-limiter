@@ -20,7 +20,6 @@ The Tenant-Aware Distributed Rate Limiter requires a robust, non-blocking founda
 
 - **Framework**: Spring Boot 3.x with Spring WebFlux. Selected over Spring Web MVC to support non-blocking I/O and reactive streaming, essential for high throughput without thread exhaustion.
 - **Routing Approach**: Pure Spring WebFlux with custom routing logic using `WebClient`. This approach was selected instead of Spring Cloud Gateway to provide maximum control over the Jackson Streaming API for non-blocking payload parsing in subsequent tasks, avoiding the memory overhead of fully buffering requests.
-- **Route Separation**: All routing definitions will be isolated in dedicated configuration classes under a separate package (e.g., `RouterConfig` under `com.ratelimiter.config`) to keep the application bootstrap class clean and modular.
 - **State Management Preparedness**: `spring-boot-starter-data-redis-reactive` is included now to establish the Lettuce client foundation for future distributed state management.
 
 ## Risks / Trade-offs
