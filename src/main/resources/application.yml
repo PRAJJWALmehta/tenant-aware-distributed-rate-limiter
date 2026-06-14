@@ -1,0 +1,11 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: tenant-aware-rate-limiter
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      # We will expand this in Task 4 when implementing the Token Bucket
