@@ -77,12 +77,12 @@ git commit -m "feat: project setup and health endpoint"
 - [ ] **Step 1: Write the failing test**
 
 ```java
-// Test that requests missing X-Tenant-Id return 401 Unauthorized
+// Test extracting X-Tenant-Id, X-Forwarded-For fallback, connection IP fallback, and 401 rejection when toggle is disabled
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 - [ ] **Step 3: Write minimal implementation**
-Extract `X-Tenant-Id` in a Spring WebFilter. If missing, return 401. If present, add to reactor context.
+Extract `X-Tenant-Id` in a Spring WebFilter. If missing, check `ratelimiter.fallback.ip.enabled` property. If true, extract from `X-Forwarded-For` or connection IP. If false, return 401. Add result to reactor context.
 - [ ] **Step 4: Run test to verify it passes**
 - [ ] **Step 5: Commit**
 
