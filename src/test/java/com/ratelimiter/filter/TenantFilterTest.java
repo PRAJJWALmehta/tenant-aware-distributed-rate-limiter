@@ -18,7 +18,7 @@ public class TenantFilterTest {
     public void testValidTenantHeader() {
         TenantFilter filter = new TenantFilter(true);
         MockServerWebExchange exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.get("/test").header("X-Tenant-Id", "tenant-abc")
+                MockServerHttpRequest.get("/test").header(TenantFilter.TENANT_HEADER, "tenant-abc")
         );
 
         filter.filter(exchange, new WebFilterChain() {
@@ -37,7 +37,7 @@ public class TenantFilterTest {
     public void testHeaderMissingFallbackEnabledXForwardedFor() {
         TenantFilter filter = new TenantFilter(true);
         MockServerWebExchange exchange = MockServerWebExchange.from(
-                MockServerHttpRequest.get("/test").header("X-Forwarded-For", "192.168.1.50, 10.0.0.1")
+                MockServerHttpRequest.get("/test").header(TenantFilter.X_FORWARDED_FOR_HEADER, "192.168.1.50, 10.0.0.1")
         );
 
         filter.filter(exchange, new WebFilterChain() {

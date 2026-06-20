@@ -14,6 +14,8 @@ import java.net.InetSocketAddress;
 public class TenantFilter implements WebFilter {
 
     public static final String TENANT_KEY = "tenantId";
+    public static final String TENANT_HEADER = "X-Tenant-Id";
+    public static final String X_FORWARDED_FOR_HEADER = "X-Forwarded-For";
     private final boolean fallbackIpEnabled;
 
     public TenantFilter(@Value("${ratelimiter.fallback.ip.enabled:true}") boolean fallbackIpEnabled) {
@@ -26,7 +28,7 @@ public class TenantFilter implements WebFilter {
             return chain.filter(exchange);
         }
 
-        String tenantId = exchange.getRequest().getHeaders().getFirst("X-Tenant-Id");
+        String tenantId = exchange.getRequest().getHeaders().getFirst(TENANT_HEADER);
         if (tenantId != null && !tenantId.trim().isEmpty()) {
             String finalTenantId = tenantId.trim();
             return chain.filter(exchange)
@@ -39,7 +41,7 @@ public class TenantFilter implements WebFilter {
         }
 
         String ip = null;
-        String xForwardedFor = exchange.getRequest().getHeaders().getFirst("X-Forwarded-For");
+        String xForwardedFor = exchange.getRequest().getHeaders().getFirst(X_FORWARDED_FOR_HEADER);
         if (xForwardedFor != null && !xForwardedFor.trim().isEmpty()) {
             String[] ips = xForwardedFor.split(",");
             if (ips.length > 0 && !ips[0].trim().isEmpty()) {
