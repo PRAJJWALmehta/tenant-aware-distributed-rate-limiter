@@ -10,7 +10,7 @@ Based on architectural best practices for 100k+ RPS systems:
 - **JSON Processing:** Jackson Streaming API (`JsonParser`). To avoid OOM errors, we stream the payload, extract target fields, and forward the stream directly.
 
 ## Design Decisions
-- **Tenant Identification:** Identified via the `X-Tenant-Id` HTTP header. 
+- **Tenant Identification:** Identified via the `X-Tenant-Id` HTTP header, with an automatic fallback to the client's IP address (via `X-Forwarded-For` or remote connection IP) if the header is missing.
 - **Payload Fallbacks:** If `max_tokens` is missing from the payload, the cost is dynamically estimated based on the string length of the `prompt` plus a configurable default buffer.
 - **Streaming & True-ups:** For simplicity and high throughput, the token cost is estimated upfront and deducted *before* routing the request. No asynchronous true-ups are performed on streamed responses.
 
@@ -25,3 +25,4 @@ Based on architectural best practices for 100k+ RPS systems:
 2. **Missing Payload Fields:** Falls back to prompt length estimation.
 3. **Invalid JSON:** Rejected immediately with 400 Bad Request.
 4. **Upstream Timeouts:** Strict timeouts enforced to return 504 Gateway Timeout.
+5. **DDoS / Unauthenticated Floods:** IP fallback can be dynamically disabled via configuration to instantly reject all unauthenticated requests with 401.
