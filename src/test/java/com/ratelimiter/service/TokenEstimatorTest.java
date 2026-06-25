@@ -37,4 +37,21 @@ public class TokenEstimatorTest {
             estimator.estimate(json.getBytes());
         });
     }
+
+    @Test
+    public void testSkipsNestedStructures() {
+        String json = "{\"messages\": [{\"prompt\": \"nested content\", \"max_tokens\": 999}], \"prompt\": \"root content\"}";
+        int estimate = estimator.estimate(json.getBytes());
+        // "root content" length is 12, buffer is 10, total should be 22
+        assertEquals(22, estimate);
+    }
+
+    @Test
+    public void testNonNumericMaxTokensFallsBack() {
+        String json = "{\"max_tokens\": \"one hundred\", \"prompt\": \"Hello\"}";
+        int estimate = estimator.estimate(json.getBytes());
+        // "Hello" length is 5, buffer is 10, total should be 15 (max_tokens is ignored because it's not a numeric token)
+        assertEquals(15, estimate);
+    }
 }
+
