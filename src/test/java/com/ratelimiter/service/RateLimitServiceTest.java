@@ -9,7 +9,12 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
+
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SpringBootTest
 @Testcontainers
@@ -90,5 +95,44 @@ class RateLimitServiceTest {
         StepVerifier.create(rateLimitService.isAllowed("tenant-init-excess", 101))
                 .expectNext(false)
                 .verifyComplete();
+    }
+
+    @Test
+    void testInputValidation() {
+        StepVerifier.create(rateLimitService.isAllowed(null, 10))
+                .expectError(IllegalArgumentException.class)
+                .verify();
+
+        StepVerifier.create(rateLimitService.isAllowed("", 10))
+                .expectError(IllegalArgumentException.class)
+                .verify();
+
+        StepVerifier.create(rateLimitService.isAllowed("   ", 10))
+                .expectError(IllegalArgumentException.class)
+                .verify();
+
+        StepVerifier.create(rateLimitService.isAllowed("tenant-valid", 0))
+                .expectError(IllegalArgumentException.class)
+                .verify();
+
+        StepVerifier.create(rateLimitService.isAllowed("tenant-valid", -5))
+                .expectError(IllegalArgumentException.class)
+                .verify();
+    }
+
+    @Test
+    void testConcurrentRequestsAtomicDeduction() {
+        // Capacity is 100. 20 concurrent requests of 10 tokens each.
+        // Exactly 10 should succeed (10 * 10 = 100), and exactly 10 should be denied.
+        List<Boolean> results = Flux.range(1, 20)
+                .flatMap(i -> rateLimitService.isAllowed("tenant-concurrent", 10))
+                .collectList()
+                .block();
+
+        long allowedCount = results.stream().filter(Boolean::booleanValue).count();
+        long deniedCount = results.stream().filter(b -> !b).count();
+
+        assertEquals(10, allowedCount, "Exactly 10 requests should be allowed for capacity 100");
+        assertEquals(10, deniedCount, "Remaining 10 requests should be denied");
     }
 }

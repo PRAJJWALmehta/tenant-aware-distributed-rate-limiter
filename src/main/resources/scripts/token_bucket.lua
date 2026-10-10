@@ -3,6 +3,10 @@ local requested = tonumber(ARGV[1])
 local capacity = tonumber(ARGV[2])
 local refill_rate = tonumber(ARGV[3])
 
+if not requested or requested <= 0 then
+    return 0
+end
+
 local time_res = redis.call('TIME')
 local now_sec = tonumber(time_res[1])
 local now_usec = tonumber(time_res[2])
@@ -35,5 +39,9 @@ if current_tokens >= requested then
 end
 
 redis.call('HSET', key, 'tokens', current_tokens, 'last_refill_ts', last_refill_ts)
+
+local refill_time_sec = math.ceil(capacity / math.max(1, refill_rate))
+local ttl = math.max(3600, refill_time_sec * 2)
+redis.call('EXPIRE', key, ttl)
 
 return allowed

@@ -34,6 +34,13 @@ public class RateLimitService {
     }
 
     public Mono<Boolean> isAllowed(String tenantId, int requestedTokens) {
+        if (tenantId == null || tenantId.isBlank()) {
+            return Mono.error(new IllegalArgumentException("tenantId cannot be null or blank"));
+        }
+        if (requestedTokens <= 0) {
+            return Mono.error(new IllegalArgumentException("requestedTokens must be greater than zero"));
+        }
+
         String key = "rate_limit:" + tenantId;
         List<String> keys = Collections.singletonList(key);
         List<String> args = List.of(
