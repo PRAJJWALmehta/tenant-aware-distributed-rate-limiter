@@ -8,4 +8,9 @@ spring:
     redis:
       host: localhost
       port: 6379
-      # We will expand this in Task 4 when implementing the Token Bucket
+
+ratelimiter:
+  bucket:
+    capacity: 100
+    refill-rate: 10
+

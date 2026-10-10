@@ -18,7 +18,7 @@
 - Create: `src/main/resources/application.yml`
 - Test: `src/test/java/com/ratelimiter/GatewayRoutingTest.java`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```java
 package com.ratelimiter;
@@ -44,22 +44,22 @@ public class GatewayRoutingTest {
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `mvn test -Dtest=GatewayRoutingTest`
 Expected: FAIL (files missing/compilation error)
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `pom.xml` with `spring-boot-starter-webflux` and `spring-boot-starter-data-redis-reactive`.
 Create `GatewayApplication.java` and a basic `/health` router in Spring WebFlux.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `mvn test -Dtest=GatewayRoutingTest`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add .
@@ -74,17 +74,17 @@ git commit -m "feat: project setup and health endpoint"
 - Create: `src/main/java/com/ratelimiter/filter/TenantFilter.java`
 - Test: `src/test/java/com/ratelimiter/filter/TenantFilterTest.java`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```java
 // Test extracting X-Tenant-Id, X-Forwarded-For fallback, connection IP fallback, and 401 rejection when toggle is disabled
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 2: Run test to verify it fails**
+- [x] **Step 3: Write minimal implementation**
 Extract `X-Tenant-Id` in a Spring WebFilter. If missing, check `ratelimiter.fallback.ip.enabled` property. If true, extract from `X-Forwarded-For` or connection IP. If false, return 401. Add result to reactor context.
-- [ ] **Step 4: Run test to verify it passes**
-- [ ] **Step 5: Commit**
+- [x] **Step 4: Run test to verify it passes**
+- [x] **Step 5: Commit**
 
 ---
 
@@ -94,13 +94,13 @@ Extract `X-Tenant-Id` in a Spring WebFilter. If missing, check `ratelimiter.fall
 - Create: `src/main/java/com/ratelimiter/service/TokenEstimator.java`
 - Test: `src/test/java/com/ratelimiter/service/TokenEstimatorTest.java`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 Verify it correctly extracts `max_tokens` from JSON. Verify fallback logic calculates `prompt` length + buffer.
-- [ ] **Step 2: Run test**
-- [ ] **Step 3: Write implementation**
+- [x] **Step 2: Run test**
+- [x] **Step 3: Write implementation**
 Use `JsonFactory` and `JsonParser` to non-blockingly parse byte arrays and extract token values.
-- [ ] **Step 4: Run test**
-- [ ] **Step 5: Commit**
+- [x] **Step 4: Run test**
+- [x] **Step 5: Commit**
 
 ---
 
@@ -111,13 +111,13 @@ Use `JsonFactory` and `JsonParser` to non-blockingly parse byte arrays and extra
 - Create: `src/main/java/com/ratelimiter/service/RateLimitService.java`
 - Test: `src/test/java/com/ratelimiter/service/RateLimitServiceTest.java`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 Use Testcontainers Redis to verify bucket deduction and 429 rejections.
-- [ ] **Step 2: Run test**
-- [ ] **Step 3: Write implementation**
+- [x] **Step 2: Run test**
+- [x] **Step 3: Write implementation**
 Write the Lua script for token bucket. Use Spring `ReactiveRedisTemplate` to execute the script asynchronously.
-- [ ] **Step 4: Run test**
-- [ ] **Step 5: Commit**
+- [x] **Step 4: Run test**
+- [x] **Step 5: Commit**
 
 ---
 
