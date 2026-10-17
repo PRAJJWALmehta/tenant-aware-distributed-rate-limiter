@@ -29,7 +29,7 @@ public class GatewayIntegrationTest {
         registry.add("spring.data.redis.host", redis::getHost);
         registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         registry.add("ratelimiter.bucket.capacity", () -> 100);
-        registry.add("ratelimiter.bucket.refill-rate", () -> 10);
+        registry.add("ratelimiter.bucket.refill-rate", () -> 0);
         registry.add("ratelimiter.token.fallback-buffer", () -> 10);
     }
 
@@ -139,5 +139,22 @@ public class GatewayIntegrationTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(String.class).isEqualTo("OK");
+    }
+
+    @org.junit.jupiter.api.Nested
+    @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "ratelimiter.fallback.ip.enabled=false")
+    class FallbackDisabledIntegrationTest {
+
+        @Autowired
+        private WebTestClient webClient;
+
+        @Test
+        void testMissingTenantHeaderWithIpFallbackDisabledReturns401() {
+            webClient.post().uri("/v1/chat/completions")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue("{\"max_tokens\": 10}")
+                    .exchange()
+                    .expectStatus().isUnauthorized();
+        }
     }
 }

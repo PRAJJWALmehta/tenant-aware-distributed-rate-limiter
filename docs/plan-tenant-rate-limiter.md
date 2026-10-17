@@ -127,10 +127,10 @@ Write the Lua script for token bucket. Use Spring `ReactiveRedisTemplate` to exe
 - Modify: `GatewayApplication.java`
 - Test: `src/test/java/com/ratelimiter/GatewayIntegrationTest.java`
 
-- [ ] **Step 1: Write failing test**
+- [x] **Step 1: Write failing test**
 Send a complete POST request, verify Redis decreases, verify successful route.
-- [ ] **Step 2: Run test**
-- [ ] **Step 3: Write implementation**
+- [x] **Step 2: Run test**
+- [x] **Step 3: Write implementation**
 Tie the TenantFilter, TokenEstimator, and RateLimitService together in the main WebFlux routing flow.
-- [ ] **Step 4: Run test**
-- [ ] **Step 5: Commit**
+- [x] **Step 4: Run test**
+- [x] **Step 5: Commit**

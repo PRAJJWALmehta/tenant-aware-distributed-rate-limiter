@@ -18,6 +18,8 @@ import static org.springframework.web.reactive.function.server.RequestPredicates
 @SpringBootApplication
 public class GatewayApplication {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GatewayApplication.class);
+
     public static void main(String[] args) {
         SpringApplication.run(GatewayApplication.class, args);
     }
@@ -59,6 +61,11 @@ public class GatewayApplication {
                                             return ServerResponse.status(HttpStatus.TOO_MANY_REQUESTS)
                                                     .bodyValue("Rate limit exceeded");
                                         }
+                                    })
+                                    .onErrorResume(e -> {
+                                        log.error("Rate limit check failed for tenant {}", tenantId, e);
+                                        return ServerResponse.status(HttpStatus.SERVICE_UNAVAILABLE)
+                                                .bodyValue("Rate limiter service unavailable");
                                     });
                         });
             })
