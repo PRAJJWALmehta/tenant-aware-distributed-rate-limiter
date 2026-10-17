@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: tenant-aware-rate-limiter
+  codec:
+    max-in-memory-size: 10MB
   data:
     redis:
       host: localhost
