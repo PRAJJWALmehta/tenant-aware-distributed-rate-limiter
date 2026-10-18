@@ -146,12 +146,12 @@ Tie the TenantFilter, TokenEstimator, and RateLimitService together in the main 
 - Create: `mock-upstream/server.py`
 - Create: `scripts/verify-docker.sh`
 
-- [ ] **Step 1: Write upstream mock and verification script**
+- [x] **Step 1: Write upstream mock and verification script**
 
 Create `mock-upstream/server.py` using Python `http.server` to return HTTP 200 with `{"choices": [{"text": "Mock LLM response"}]}` and simulated 30ms latency.
 Create `scripts/verify-docker.sh` to automate health check, valid request verification, and 429 rate limit testing against docker containers.
 
-- [ ] **Step 2: Write multi-stage Dockerfile for Gateway & docker-compose.yml**
+- [x] **Step 2: Write multi-stage Dockerfile for Gateway & docker-compose.yml**
 
 Create a multi-stage `Dockerfile`:
 - Stage 1: Build JAR using `maven:3.9.6-eclipse-temurin-21-alpine`
@@ -161,12 +161,12 @@ Create `docker-compose.yml` wiring:
 - `mock-upstream` on port 8081
 - `gateway` on port 8080 (configured with `SPRING_DATA_REDIS_HOST=redis` and `UPSTREAM_URL=http://mock-upstream:8081`)
 
-- [ ] **Step 3: Run docker-compose build and launch services**
+- [x] **Step 3: Run docker-compose build and launch services**
 
 Run: `docker compose up -d --build`
 Expected: Containers `redis`, `mock-upstream`, and `gateway` start in healthy status.
 
-- [ ] **Step 4: Run verification script to confirm end-to-end routing**
+- [x] **Step 4: Run verification script to confirm end-to-end routing**
 
 Run: `bash scripts/verify-docker.sh`
 Expected:
@@ -175,7 +175,7 @@ Expected:
 - Redis key `rate_limit:test-tenant` decremented
 - Repeated requests exceeding budget -> HTTP 429 "Too Many Requests"
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Dockerfile docker-compose.yml mock-upstream/ scripts/verify-docker.sh
