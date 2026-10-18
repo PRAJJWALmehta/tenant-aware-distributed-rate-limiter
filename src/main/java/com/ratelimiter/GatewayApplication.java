@@ -3,10 +3,13 @@ package com.ratelimiter;
 import com.ratelimiter.filter.TenantFilter;
 import com.ratelimiter.service.RateLimitService;
 import com.ratelimiter.service.TokenEstimator;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerResponse;
@@ -31,7 +34,15 @@ public class GatewayApplication {
     }
 
     @Bean
-    public RouterFunction<ServerResponse> apiRouter(RateLimitService rateLimitService, TokenEstimator tokenEstimator) {
+    public RouterFunction<ServerResponse> apiRouter(
+            RateLimitService rateLimitService, 
+            TokenEstimator tokenEstimator,
+            @Value("${upstream.url:}") String upstreamUrl) {
+
+        final WebClient webClient = (upstreamUrl != null && !upstreamUrl.isBlank())
+                ? WebClient.builder().baseUrl(upstreamUrl).build()
+                : null;
+
         return RouterFunctions.route(POST("/**"), request ->
             Mono.deferContextual(ctx -> {
                 String tenantId = ctx.getOrDefault(TenantFilter.TENANT_KEY, null);
@@ -56,6 +67,32 @@ public class GatewayApplication {
                             return rateLimitService.isAllowed(tenantId, tokens)
                                     .flatMap(allowed -> {
                                         if (allowed) {
+                                            if (webClient != null) {
+                                                return webClient.post()
+                                                        .uri(request.path())
+                                                        .contentType(request.headers().contentType().orElse(MediaType.APPLICATION_JSON))
+                                                        .bodyValue(body)
+                                                        .exchangeToMono(clientResponse -> 
+                                                            clientResponse.bodyToMono(byte[].class)
+                                                                    .defaultIfEmpty(new byte[0])
+                                                                    .flatMap(upstreamBody -> 
+                                                                        ServerResponse.status(clientResponse.statusCode())
+                                                                                .headers(headers -> {
+                                                                                    clientResponse.headers().asHttpHeaders().forEach((name, values) -> {
+                                                                                        if (!name.equalsIgnoreCase("Transfer-Encoding") && !name.equalsIgnoreCase("Content-Length")) {
+                                                                                            headers.addAll(name, values);
+                                                                                        }
+                                                                                    });
+                                                                                })
+                                                                                .bodyValue(upstreamBody)
+                                                                    )
+                                                        )
+                                                        .onErrorResume(e -> {
+                                                            log.error("Upstream proxy request failed for tenant {}", tenantId, e);
+                                                            return ServerResponse.status(HttpStatus.BAD_GATEWAY)
+                                                                    .bodyValue("Bad Gateway");
+                                                        });
+                                            }
                                             return ServerResponse.ok().bodyValue("OK");
                                         } else {
                                             return ServerResponse.status(HttpStatus.TOO_MANY_REQUESTS)

@@ -1,6 +1,7 @@
 import http.server
 import json
 import os
+import signal
 import sys
 import time
 
@@ -39,10 +40,11 @@ class MockLLMHandler(http.server.BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     server = http.server.ThreadingHTTPServer((HOST, PORT), MockLLMHandler)
+    signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
     print(f"Mock LLM upstream server listening on {HOST}:{PORT}", flush=True)
     try:
         server.serve_forever()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, SystemExit):
         pass
     finally:
         server.server_close()

@@ -9,15 +9,33 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
+UPSTREAM_URL="${UPSTREAM_URL:-http://localhost:8081}"
 TENANT_ID="${TENANT_ID:-test-tenant}"
 MAX_WAIT_SECONDS=30
+
+RESPONSE_FILE=""
+cleanup() {
+  if [ -n "${RESPONSE_FILE:-}" ] && [ -f "${RESPONSE_FILE:-}" ]; then
+    rm -f "$RESPONSE_FILE"
+  fi
+}
+trap cleanup EXIT
 
 echo -e "${BLUE}======================================================${NC}"
 echo -e "${BLUE}  Tenant-Aware Rate Limiter - Docker Verification     ${NC}"
 echo -e "${BLUE}======================================================${NC}"
 
-# Step 0: Wait for Gateway to become ready
-echo -e "\n${YELLOW}[1/4] Waiting for Gateway health check on ${GATEWAY_URL}/health...${NC}"
+# Step 0: Check mock upstream health if reachable
+echo -e "\n${YELLOW}[1/5] Checking mock upstream on ${UPSTREAM_URL}...${NC}"
+UPSTREAM_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${UPSTREAM_URL}" || echo "000")
+if [ "$UPSTREAM_STATUS" = "200" ]; then
+  echo -e "${GREEN}✔ Mock upstream reachable on ${UPSTREAM_URL} (HTTP 200)${NC}"
+else
+  echo -e "${YELLOW}⚠ Mock upstream port ${UPSTREAM_URL} returned status ${UPSTREAM_STATUS}${NC}"
+fi
+
+# Step 1: Wait for Gateway to become ready
+echo -e "\n${YELLOW}[2/5] Waiting for Gateway health check on ${GATEWAY_URL}/health...${NC}"
 READY=false
 for i in $(seq 1 "$MAX_WAIT_SECONDS"); do
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${GATEWAY_URL}/health" || echo "000")
@@ -41,8 +59,8 @@ else
   exit 1
 fi
 
-# Step 1: Send valid tenant request (200 OK)
-echo -e "\n${YELLOW}[2/4] Testing valid request with tenant '${TENANT_ID}'...${NC}"
+# Step 2: Send valid tenant request (200 OK)
+echo -e "\n${YELLOW}[3/5] Testing valid request with tenant '${TENANT_ID}'...${NC}"
 PAYLOAD='{"model": "gpt-4", "messages": [{"role": "user", "content": "Hello rate limiter"}], "max_tokens": 15}'
 
 RESPONSE_FILE=$(mktemp)
@@ -54,6 +72,7 @@ HTTP_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" \
 
 RESPONSE_BODY=$(cat "$RESPONSE_FILE")
 rm -f "$RESPONSE_FILE"
+RESPONSE_FILE=""
 
 if [ "$HTTP_CODE" = "200" ]; then
   echo -e "${GREEN}✔ Valid request succeeded: HTTP 200 (Body: ${RESPONSE_BODY})${NC}"
@@ -62,23 +81,24 @@ else
   exit 1
 fi
 
-# Step 2: Verify Redis key token deduction
-echo -e "\n${YELLOW}[3/4] Checking Redis token deduction for key rate_limit:${TENANT_ID}...${NC}"
+# Step 3: Verify Redis key token deduction
+echo -e "\n${YELLOW}[4/5] Checking Redis token deduction for key rate_limit:${TENANT_ID}...${NC}"
 REDIS_TOKENS=""
 if docker compose exec -T redis redis-cli ping > /dev/null 2>&1; then
-  REDIS_TOKENS=$(docker compose exec -T redis redis-cli hget "rate_limit:${TENANT_ID}" tokens | tr -d '\r')
+  REDIS_TOKENS=$(docker compose exec -T redis redis-cli --raw hget "rate_limit:${TENANT_ID}" tokens 2>/dev/null | tr -d '\r\n')
 elif command -v redis-cli > /dev/null 2>&1; then
-  REDIS_TOKENS=$(redis-cli -h localhost -p 6379 hget "rate_limit:${TENANT_ID}" tokens | tr -d '\r')
+  REDIS_TOKENS=$(redis-cli -h localhost -p 6379 --raw hget "rate_limit:${TENANT_ID}" tokens 2>/dev/null | tr -d '\r\n')
 fi
 
-if [ -n "$REDIS_TOKENS" ]; then
+if [[ "$REDIS_TOKENS" =~ ^[0-9]+$ ]] && [ "$REDIS_TOKENS" -le 85 ]; then
   echo -e "${GREEN}✔ Redis token balance verified: rate_limit:${TENANT_ID} has ${REDIS_TOKENS} tokens remaining (decremented from 100)${NC}"
 else
-  echo -e "${YELLOW}⚠ Could not directly inspect Redis CLI, but request succeeded with 200 OK.${NC}"
+  echo -e "${RED}✖ Redis token balance check failed: expected numeric value <= 85, got '${REDIS_TOKENS}'${NC}"
+  exit 1
 fi
 
-# Step 3: Trigger rate limit saturation (HTTP 429)
-echo -e "\n${YELLOW}[4/4] Testing rate limit budget exhaustion (HTTP 429)...${NC}"
+# Step 4: Trigger rate limit saturation (HTTP 429)
+echo -e "\n${YELLOW}[5/5] Testing rate limit budget exhaustion (HTTP 429)...${NC}"
 SATURATION_PAYLOAD='{"model": "gpt-4", "messages": [{"role": "user", "content": "Large token request"}], "max_tokens": 120}'
 
 RESPONSE_FILE=$(mktemp)
@@ -90,6 +110,7 @@ SAT_CODE=$(curl -s -o "$RESPONSE_FILE" -w "%{http_code}" \
 
 SAT_BODY=$(cat "$RESPONSE_FILE")
 rm -f "$RESPONSE_FILE"
+RESPONSE_FILE=""
 
 if [ "$SAT_CODE" = "429" ]; then
   echo -e "${GREEN}✔ Rate limit enforcement verified: HTTP 429 Too Many Requests (Body: ${SAT_BODY})${NC}"

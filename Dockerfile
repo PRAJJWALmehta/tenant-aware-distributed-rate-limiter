@@ -16,9 +16,14 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 # Copy executable jar from builder stage
-COPY --from=builder /build/target/*.jar app.jar
+COPY --from=builder /build/target/gateway-*.jar app.jar
+RUN chown -R appuser:appgroup /app
+
+USER appuser
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]
