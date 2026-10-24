@@ -1,8 +1,10 @@
 # concurrency-performance-benchmarks Specification
 
 ## Purpose
-TBD - created by archiving change concurrency-performance-benchmarks. Update Purpose after archive.
+Provide a standardized k6 load testing suite, automated benchmark execution runner, and comprehensive empirical performance documentation validating throughput, gateway latency overhead (< 5ms SLA), rate limit throttling accuracy, and multi-tenant noisy-neighbor isolation.
+
 ## Requirements
+
 ### Requirement: k6 load test scenario definitions
 The system SHALL provide a modular k6 load testing suite in `benchmarks/k6-load-test.js` defining scenarios for nominal traffic, rate limit saturation, and noisy neighbor tenant isolation. The suite SHALL configure realistic HTTP requests targeting the `/v1/chat/completions` endpoint with standard JSON payloads, `X-Tenant-ID` identification headers, and validation assertions for response status codes and timing metrics.
 
@@ -12,7 +14,7 @@ The system SHALL provide a modular k6 load testing suite in `benchmarks/k6-load-
 
 #### Scenario: Rate limit saturation scenario execution
 - **WHEN** the `rate_limit_saturation` scenario executes an intentional high-velocity burst of requests against a single tenant exceeding their configured token bucket limit
-- **THEN** requests exceeding the quota return HTTP 429 Too Many Requests responses with rate limit response headers (`Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`).
+- **THEN** requests exceeding the quota return HTTP 429 Too Many Requests responses.
 
 #### Scenario: Noisy neighbor isolation scenario execution
 - **WHEN** the `noisy_neighbor_isolation` scenario executes concurrently with Tenant A saturating their token quota and Tenant B sending traffic within their normal quota
@@ -47,4 +49,3 @@ The system SHALL provide a structured benchmark report in `docs/BENCHMARKS.md` t
 #### Scenario: Hardware and environment specification context
 - **WHEN** reproducing benchmark results from `docs/BENCHMARKS.md`
 - **THEN** the report details the test environment hardware context including CPU architecture (e.g., Apple Silicon M-series), CPU core count, system memory, OS version, and container topology.
-

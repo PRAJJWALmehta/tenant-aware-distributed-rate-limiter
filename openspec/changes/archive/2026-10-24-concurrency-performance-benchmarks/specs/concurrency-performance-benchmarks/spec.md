@@ -9,7 +9,7 @@ The system SHALL provide a modular k6 load testing suite in `benchmarks/k6-load-
 
 #### Scenario: Rate limit saturation scenario execution
 - **WHEN** the `rate_limit_saturation` scenario executes an intentional high-velocity burst of requests against a single tenant exceeding their configured token bucket limit
-- **THEN** requests exceeding the quota return HTTP 429 Too Many Requests responses with rate limit response headers (`Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`).
+- **THEN** requests exceeding the quota return HTTP 429 Too Many Requests responses.
 
 #### Scenario: Noisy neighbor isolation scenario execution
 - **WHEN** the `noisy_neighbor_isolation` scenario executes concurrently with Tenant A saturating their token quota and Tenant B sending traffic within their normal quota

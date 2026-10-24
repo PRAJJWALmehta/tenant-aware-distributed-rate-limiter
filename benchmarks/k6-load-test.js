@@ -22,6 +22,7 @@ const COMPLETIONS_URL = `${BASE_URL}/v1/chat/completions`;
 const UPSTREAM_SIMULATED_LATENCY_MS = 30.0;
 
 export const options = {
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   scenarios: {
     nominal_traffic: {
       executor: 'constant-vus',
@@ -37,11 +38,18 @@ export const options = {
       exec: 'runSaturation',
       tags: { scenario: 'rate_limit_saturation' }
     },
-    noisy_neighbor_isolation: {
+    noisy_neighbor_tenant_a: {
       executor: 'constant-vus',
-      vus: 30,
+      vus: 25,
       duration: '60s',
-      exec: 'runNoisyNeighbor',
+      exec: 'runNoisyTenantA',
+      tags: { scenario: 'noisy_neighbor_isolation' }
+    },
+    noisy_neighbor_tenant_b: {
+      executor: 'constant-vus',
+      vus: 5,
+      duration: '60s',
+      exec: 'runIsolatedTenantB',
       tags: { scenario: 'noisy_neighbor_isolation' }
     }
   },
@@ -119,61 +127,77 @@ export function runSaturation() {
 }
 
 /**
- * Scenario 3: Noisy Neighbor Isolation
- * Concurrent load where Tenant A saturates budget and gets 429s,
- * while Tenant B continues receiving 200 OK without latency degradation.
+ * Scenario 3A: Noisy Neighbor Tenant A
+ * Aggressive tenant bursting beyond quota receiving continuous HTTP 429s.
+ */
+export function runNoisyTenantA() {
+  const tenantA = 'tenant-noisy-a';
+  const payloadA = makePayload(120, 'Noisy tenant A burst');
+  const resA = http.post(COMPLETIONS_URL, payloadA, makeHeaders(tenantA));
+  
+  const is429 = check(resA, {
+    'noisy tenant A receives 429': (r) => r.status === 429,
+  });
+  noisyTenantA429Rate.add(is429);
+  noisyTenantALatency.add(resA.timings.duration);
+  sleep(0.02);
+}
+
+/**
+ * Scenario 3B: Isolated Conforming Tenant B
+ * Well-behaved tenant operating within 10 tokens/s quota (~4.5 req/s), receiving 100% 200 OK.
+ */
+export function runIsolatedTenantB() {
+  const tenantB = 'tenant-isolated-b';
+  const payloadB = makePayload(1, 'Isolated tenant B nominal request');
+  const resB = http.post(COMPLETIONS_URL, payloadB, makeHeaders(tenantB));
+  
+  const is200 = check(resB, {
+    'isolated tenant B receives 200 OK': (r) => r.status === 200,
+  });
+  isolatedTenantBSuccessRate.add(is200);
+  isolatedTenantBLatency.add(resB.timings.duration);
+  sleep(0.60); // Paced to preserve tenant B budget
+}
+
+/**
+ * Combined Noisy Neighbor handler for backward compatibility
  */
 export function runNoisyNeighbor() {
-  // Partition: 3 VUs for Tenant B (multiples of 10), remaining 27 VUs for noisy Tenant A
-  const isTenantB = (__VU % 10 === 0);
-  
-  if (isTenantB) {
-    // Tenant B: Well-behaved tenant operating within 10 tokens/s quota (~4.5 req/s)
-    const tenantB = 'tenant-isolated-b';
-    const payloadB = makePayload(1, 'Isolated tenant B nominal request');
-    const resB = http.post(COMPLETIONS_URL, payloadB, makeHeaders(tenantB));
-    
-    const is200 = check(resB, {
-      'isolated tenant B receives 200 OK': (r) => r.status === 200,
-    });
-    isolatedTenantBSuccessRate.add(is200);
-    isolatedTenantBLatency.add(resB.timings.duration);
-    sleep(0.60); // Paced to preserve tenant B budget
+  if (__VU % 5 === 0) {
+    runIsolatedTenantB();
   } else {
-    // Tenant A: Noisy neighbor overflowing quota
-    const tenantA = 'tenant-noisy-a';
-    const payloadA = makePayload(120, 'Noisy tenant A burst');
-    const resA = http.post(COMPLETIONS_URL, payloadA, makeHeaders(tenantA));
-    
-    const is429 = check(resA, {
-      'noisy tenant A receives 429': (r) => r.status === 429,
-    });
-    noisyTenantA429Rate.add(is429);
-    noisyTenantALatency.add(resA.timings.duration);
-    sleep(0.02);
+    runNoisyTenantA();
   }
 }
 
 /**
  * Default handler for CLI override execution (e.g. `k6 run --vus 5 --duration 10s`)
+ * Maps all 5 VUs across every discrete test condition so smoke tests cover every scenario.
  */
 export default function () {
-  const scenarioEnv = __ENV.SCENARIO;
+  const scenarioEnv = __ENV.SCENARIO || __ENV.SCENARIO_NAME;
   if (scenarioEnv === 'nominal_traffic') {
     runNominal();
   } else if (scenarioEnv === 'rate_limit_saturation') {
     runSaturation();
   } else if (scenarioEnv === 'noisy_neighbor_isolation') {
     runNoisyNeighbor();
+  } else if (scenarioEnv === 'noisy_tenant_a') {
+    runNoisyTenantA();
+  } else if (scenarioEnv === 'isolated_tenant_b') {
+    runIsolatedTenantB();
   } else {
-    // Balanced distribution across scenarios for smoke tests
-    const mod = __VU % 3;
-    if (mod === 1) {
+    // Balanced 5-VU distribution ensuring all 4 metrics are sampled during smoke runs
+    const mod = __VU % 5;
+    if (mod === 1 || mod === 4) {
       runNominal();
     } else if (mod === 2) {
       runSaturation();
+    } else if (mod === 3) {
+      runNoisyTenantA();
     } else {
-      runNoisyNeighbor();
+      runIsolatedTenantB(); // mod === 0 (e.g. VU 5)
     }
   }
 }

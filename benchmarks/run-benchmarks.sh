@@ -12,6 +12,8 @@ NC='\033[0m' # No Color
 
 GATEWAY_URL="${GATEWAY_URL:-http://localhost:8080}"
 OUTPUT_DIR="${OUTPUT_DIR:-benchmarks/results}"
+VUS="${VUS:-}"
+DURATION="${DURATION:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BENCHMARK_JS="${SCRIPT_DIR}/k6-load-test.js"
 MAX_HEALTH_WAIT="${MAX_HEALTH_WAIT:-30}"
@@ -36,6 +38,12 @@ if ! command -v curl &> /dev/null; then
   exit 1
 fi
 
+if ! command -v python3 &> /dev/null; then
+  echo -e "${RED}✖ Error: 'python3' is required to process and export benchmark summaries.${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✔ python3 detected: $(python3 --version)${NC}"
+
 if [ ! -f "${BENCHMARK_JS}" ]; then
   echo -e "${RED}✖ Error: Benchmark script '${BENCHMARK_JS}' not found.${NC}"
   exit 1
@@ -45,13 +53,22 @@ echo -e "${GREEN}✔ Benchmark script found: ${BENCHMARK_JS}${NC}"
 mkdir -p "${OUTPUT_DIR}"
 echo -e "${GREEN}✔ Output directory ready: ${OUTPUT_DIR}${NC}"
 
-# Hardware inspection
-CPU_MODEL=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || sysctl -n hw.model 2>/dev/null || echo "Unknown CPU")
-CPU_CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo "Unknown cores")
-MEM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo "0")
-MEM_GB=$(( MEM_BYTES / 1024 / 1024 / 1024 ))
+# Hardware inspection (macOS & Linux cross-platform)
 OS_NAME=$(uname -s)
 OS_ARCH=$(uname -m)
+
+if [ "${OS_NAME}" = "Darwin" ]; then
+  CPU_MODEL=$(sysctl -n machdep.cpu.brand_string 2>/dev/null || sysctl -n hw.model 2>/dev/null || echo "Unknown CPU")
+  CPU_CORES=$(sysctl -n hw.ncpu 2>/dev/null || echo "Unknown cores")
+  MEM_BYTES=$(sysctl -n hw.memsize 2>/dev/null || echo "0")
+  MEM_GB=$(( MEM_BYTES / 1024 / 1024 / 1024 ))
+else
+  CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | awk -F': ' '{print $2}' || echo "Unknown CPU")
+  CPU_CORES=$(nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null || echo "Unknown cores")
+  MEM_KB=$(grep 'MemTotal' /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "0")
+  MEM_GB=$(( MEM_KB / 1024 / 1024 ))
+fi
+
 echo -e "${CYAN}ℹ Host Hardware:${NC} ${CPU_MODEL} (${CPU_CORES} cores, ${MEM_GB} GB RAM, ${OS_NAME} ${OS_ARCH})"
 
 # 2. Check Gateway Connectivity
@@ -76,39 +93,36 @@ echo -e "${GREEN}✔ Gateway is healthy on ${GATEWAY_URL} (HTTP 200)${NC}"
 # 3. Stage 1: Smoke Verification Test (5 VUs for 10s)
 echo -e "\n${YELLOW}[Step 3/4] Executing Smoke Verification Test (5 VUs, 10s)...${NC}"
 SMOKE_SUMMARY="${OUTPUT_DIR}/smoke_summary.json"
-set +e
+
 GATEWAY_URL="${GATEWAY_URL}" k6 run \
   --vus 5 \
   --duration 10s \
   --summary-trend-stats "avg,min,med,max,p(90),p(95),p(99)" \
   --summary-export="${SMOKE_SUMMARY}" \
   "${BENCHMARK_JS}"
-SMOKE_STATUS=$?
-set -e
 
-if [ $SMOKE_STATUS -ne 0 ] && [ $SMOKE_STATUS -ne 99 ]; then
-  echo -e "${RED}✖ Smoke verification failed with fatal error code ${SMOKE_STATUS}${NC}"
-  exit $SMOKE_STATUS
-fi
 echo -e "${GREEN}✔ Smoke verification complete. Results exported to ${SMOKE_SUMMARY}${NC}"
 
-# 4. Stage 2: Full Benchmark Execution (100 concurrent VUs sustained for 60s)
-echo -e "\n${YELLOW}[Step 4/4] Executing Full Benchmark Run (100 VUs across scenarios, 60s)...${NC}"
+# 4. Stage 2: Full Benchmark Execution
 FULL_SUMMARY="${OUTPUT_DIR}/full_summary.json"
 FULL_CSV="${OUTPUT_DIR}/benchmark_summary.csv"
 
-set +e
-GATEWAY_URL="${GATEWAY_URL}" k6 run \
-  --summary-trend-stats "avg,min,med,max,p(90),p(95),p(99)" \
-  --summary-export="${FULL_SUMMARY}" \
-  "${BENCHMARK_JS}"
-BENCH_STATUS=$?
-set -e
+K6_ARGS=(
+  --summary-trend-stats "avg,min,med,max,p(90),p(95),p(99)"
+  --summary-export="${FULL_SUMMARY}"
+)
 
-if [ $BENCH_STATUS -ne 0 ] && [ $BENCH_STATUS -ne 99 ]; then
-  echo -e "${RED}✖ Benchmark execution failed with fatal error code ${BENCH_STATUS}${NC}"
-  exit $BENCH_STATUS
+if [ -n "${VUS}" ]; then
+  K6_ARGS+=(--vus "${VUS}")
+  echo -e "\n${YELLOW}[Step 4/4] Executing Full Benchmark Run with custom concurrency: ${VUS} VUs (duration: ${DURATION:-60s})...${NC}"
+  if [ -n "${DURATION}" ]; then
+    K6_ARGS+=(--duration "${DURATION}")
+  fi
+else
+  echo -e "\n${YELLOW}[Step 4/4] Executing Full Benchmark Run (100 VUs across scenarios, 60s)...${NC}"
 fi
+
+GATEWAY_URL="${GATEWAY_URL}" k6 run "${K6_ARGS[@]}" "${BENCHMARK_JS}"
 
 echo -e "\n${GREEN}✔ Full benchmark execution completed!${NC}"
 echo -e "${GREEN}  JSON Summary: ${FULL_SUMMARY}${NC}"
@@ -127,7 +141,7 @@ try:
         data = json.load(f)
 except Exception as e:
     print(f"Error loading summary JSON: {e}", file=sys.stderr)
-    sys.exit(0)
+    sys.exit(1)
 
 metrics = data.get('metrics', {})
 
@@ -186,19 +200,19 @@ with open(csv_output_path, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerows(csv_rows)
 
-print("\n" + "=" * 80)
+print("\n" + "=" * 88)
 print(f"BENCHMARK RESULTS SUMMARY (Sustained RPS: {rps} req/s | Total Requests: {total_reqs})")
-print("=" * 80)
-print(f"{'Metric':<32} | {'Rate/Status':<15} | {'p50':<8} | {'p95':<8} | {'p99':<8} | {'SLA Status'}")
-print("-" * 80)
+print("=" * 88)
+print(f"{'Metric':<30} | {'Rate/Status':<14} | {'p50':<7} | {'p95':<7} | {'p99':<7} | {'SLA Status'}")
+print("-" * 88)
 
 sla_status = "PASS (<5ms)" if nominal_overhead['med'] < 5.0 else f"OVERHEAD ({nominal_overhead['med']}ms)"
-print(f"{'Gateway Latency Overhead':<32} | {'-':<15} | {str(nominal_overhead['med']) + 'ms':<8} | {str(nominal_overhead['p95']) + 'ms':<8} | {str(nominal_overhead['p99']) + 'ms':<8} | {sla_status}")
-print(f"{'Nominal Traffic (10 Tenants)':<32} | {str(nominal_success_pct) + '% 200 OK':<15} | {str(nominal_lat['med']) + 'ms':<8} | {str(nominal_lat['p95']) + 'ms':<8} | {str(nominal_lat['p99']) + 'ms':<8} | PASS")
-print(f"{'Rate Limit Saturation':<32} | {str(saturation_429_pct) + '% 429':<15} | {str(saturation_lat['med']) + 'ms':<8} | {str(saturation_lat['p95']) + 'ms':<8} | {str(saturation_lat['p99']) + 'ms':<8} | PASS")
-print(f"{'Tenant B (Isolated Neighbor)':<32} | {str(tenant_b_200_pct) + '% 200 OK':<15} | {str(isolated_b_lat['med']) + 'ms':<8} | {str(isolated_b_lat['p95']) + 'ms':<8} | {str(isolated_b_lat['p99']) + 'ms':<8} | PASS")
-print(f"{'Tenant A (Noisy Saturated)':<32} | {str(noisy_a_429_pct) + '% 429':<15} | {str(noisy_a_lat['med']) + 'ms':<8} | {str(noisy_a_lat['p95']) + 'ms':<8} | {str(noisy_a_lat['p99']) + 'ms':<8} | PASS")
-print("=" * 80)
+print(f"{'Gateway Latency Overhead':<30} | {'-':<14} | {str(nominal_overhead['med']) + 'ms':<7} | {str(nominal_overhead['p95']) + 'ms':<7} | {str(nominal_overhead['p99']) + 'ms':<7} | {sla_status}")
+print(f"{'Nominal Traffic (10 Tenants)':<30} | {str(nominal_success_pct) + '% 200':<14} | {str(nominal_lat['med']) + 'ms':<7} | {str(nominal_lat['p95']) + 'ms':<7} | {str(nominal_lat['p99']) + 'ms':<7} | PASS")
+print(f"{'Rate Limit Saturation':<30} | {str(saturation_429_pct) + '% 429':<14} | {str(saturation_lat['med']) + 'ms':<7} | {str(saturation_lat['p95']) + 'ms':<7} | {str(saturation_lat['p99']) + 'ms':<7} | PASS")
+print(f"{'Tenant B (Isolated Neighbor)':<30} | {str(tenant_b_200_pct) + '% 200':<14} | {str(isolated_b_lat['med']) + 'ms':<7} | {str(isolated_b_lat['p95']) + 'ms':<7} | {str(isolated_b_lat['p99']) + 'ms':<7} | PASS")
+print(f"{'Tenant A (Noisy Saturated)':<30} | {str(noisy_a_429_pct) + '% 429':<14} | {str(noisy_a_lat['med']) + 'ms':<7} | {str(noisy_a_lat['p95']) + 'ms':<7} | {str(noisy_a_lat['p99']) + 'ms':<7} | PASS")
+print("=" * 88)
 print(f"Summary metrics exported to CSV: {csv_output_path}\n")
 EOF
 

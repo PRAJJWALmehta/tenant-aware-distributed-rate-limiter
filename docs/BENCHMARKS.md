@@ -7,11 +7,11 @@ This report documents the empirical performance, concurrency characteristics, an
 Load tests were executed using [Grafana k6](https://k6.io/) against the multi-container Docker Compose topology (`gateway`, `redis`, `mock-upstream`). The gateway was subjected to sustained high-concurrency traffic across three discrete real-world scenarios: **nominal multi-tenant traffic**, **high-velocity single-tenant saturation**, and **concurrent noisy-neighbor tenant isolation**.
 
 ### Key Findings
-- **Sustained Throughput:** Sustained **2,065.19 requests per second (RPS)** under 100 concurrent Virtual Users (VUs) for 60 seconds with **zero dropped requests or network connection errors** (125,218 total requests completed).
-- **Throttling Accuracy:** **100.00% assertion precision** on HTTP 429 Too Many Requests responses across 119,926 intentional burst saturation requests.
-- **Noisy Neighbor Isolation:** Saturated traffic on Tenant A (100% 429s) caused **0% degradation** to conforming Tenant B (100.00% 200 OK sustained with p50 latency of 35.7ms matching baseline nominal p50).
-- **Gateway Decision Overhead:** 429 rate limit rejections were evaluated and returned in a median of **2.71ms** (p90: 6.60ms), preventing unnecessary upstream LLM invocation and saving compute costs.
-- **Nominal Processing Overhead:** Minimum gateway overhead was **615 µs (0.61ms)**, with median roundtrip latency of **36.8ms** (gateway overhead of ~6.8ms above the 30ms simulated upstream mock latency over local Docker container bridge networking).
+- **Sustained Throughput:** Sustained **1,883.86 requests per second (RPS)** under 100 concurrent Virtual Users (VUs) for 60 seconds with **zero dropped requests or network connection errors** (114,261 total requests completed).
+- **Throttling Accuracy:** **100.00% assertion precision** on HTTP 429 Too Many Requests responses across 108,689 intentional burst saturation requests.
+- **Noisy Neighbor Isolation:** Saturated traffic on Tenant A (100% 429s across 60,360 requests) caused **0% degradation** to conforming Tenant B (100.00% 200 OK sustained with p50 latency of 36.49ms, outperforming baseline nominal p50).
+- **Gateway Decision Overhead:** 429 rate limit rejections were evaluated and returned in a median of **3.49ms** (p90: 8.18ms, p99: 14.26ms), preventing unnecessary upstream LLM invocation and saving compute costs.
+- **Nominal Processing Overhead:** Minimum gateway overhead was **791 µs (0.79ms)**, with median roundtrip latency of **37.25ms** (gateway overhead of ~7.25ms above the 30ms simulated upstream mock latency over local Docker container bridge networking).
 
 ---
 
@@ -59,7 +59,7 @@ All benchmarks were executed on the following host environment:
 
 ## 4. Benchmark Scenarios
 
-The suite (`benchmarks/k6-load-test.js`) defines three discrete scenarios running concurrently:
+The suite (`benchmarks/k6-load-test.js`) defines discrete scenarios running concurrently:
 
 ### Scenario 1: `nominal_traffic`
 - **Configuration:** 50 VUs distributed across 10 distinct tenants (`tenant-01` through `tenant-10`).
@@ -74,11 +74,11 @@ The suite (`benchmarks/k6-load-test.js`) defines three discrete scenarios runnin
 - **Assertion:** 100% of requests MUST be throttled with `HTTP 429 Too Many Requests`.
 
 ### Scenario 3: `noisy_neighbor_isolation`
-- **Configuration:** 30 VUs partitioned between a saturated tenant (`tenant-noisy-a`) and an isolated, well-behaved tenant (`tenant-isolated-b`).
+- **Configuration:** Dedicated partition between a saturated tenant (`tenant-noisy-a`) and an isolated, well-behaved tenant (`tenant-isolated-b`).
 - **Goal:** Verify that a malicious or rogue tenant saturating their quota does not cause resource starvation, head-of-line blocking, or latency degradation for other tenants sharing the gateway.
 - **Traffic Profile:**
-  - `tenant-noisy-a`: 27 VUs sending high-velocity bursts exceeding quota.
-  - `tenant-isolated-b`: 3 VUs sending conforming requests (`max_tokens: 1`, 600ms pacing) within quota (~4.5 req/s).
+  - `noisy_neighbor_tenant_a`: 25 VUs sending high-velocity bursts exceeding quota.
+  - `noisy_neighbor_tenant_b`: 5 VUs sending conforming requests (`max_tokens: 1`, 600ms pacing) within quota (~4.5 req/s).
 - **Assertion:** `tenant-noisy-a` MUST receive `HTTP 429`, while `tenant-isolated-b` MUST concurrently receive `HTTP 200 OK` with zero latency degradation.
 
 ---
@@ -91,9 +91,9 @@ The suite (`benchmarks/k6-load-test.js`) defines three discrete scenarios runnin
 | :--- | :--- | :--- | :--- |
 | **Duration** | 60 seconds | 60 seconds | Completed |
 | **Concurrent VUs** | 100 VUs | 100–300 VUs | Satisfied |
-| **Total Requests** | **125,218** | > 50,000 | **Exceeded** |
-| **Sustained RPS** | **2,065.19 req/s** | > 1,000 req/s | **Exceeded** |
-| **Check Assertions** | **125,218 / 125,218 (100.00%)** | > 99.00% | **100.00% Pass** |
+| **Total Requests** | **114,261** | > 50,000 | **Exceeded** |
+| **Sustained RPS** | **1,883.86 req/s** | > 1,000 req/s | **Exceeded** |
+| **Check Assertions** | **114,261 / 114,261 (100.00%)** | > 99.00% | **100.00% Pass** |
 | **Network Errors** | **0 (0.00%)** | 0 | **Flawless** |
 
 ---
@@ -102,13 +102,13 @@ The suite (`benchmarks/k6-load-test.js`) defines three discrete scenarios runnin
 
 Results captured directly from `benchmarks/results/full_summary.json` and `benchmarks/results/benchmark_summary.csv`:
 
-| Scenario / Metric | Requests / Status | p50 Latency | p90 Latency | p95 Latency | Avg Latency | Max Latency |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Nominal Traffic (10 Tenants)** | **5,102 (100.0% 200 OK)** | 36.83 ms | 49.12 ms | 57.36 ms | 39.57 ms | 250.06 ms |
-| **Rate Limit Saturation** | **49,900 (100.0% 429)** | 2.71 ms | 6.59 ms | 9.01 ms | 3.74 ms | 219.90 ms |
-| **Noisy Tenant A (Saturated)** | **70,026 (100.0% 429)** | 2.62 ms | 6.50 ms | 8.91 ms | 3.68 ms | 218.80 ms |
-| **Tenant B (Isolated Neighbor)** | **190 (100.0% 200 OK)** | 35.71 ms | 42.95 ms | 54.88 ms | 37.59 ms | 64.46 ms |
-| **Gateway Latency Overhead** | - | **6.83 ms** | 19.12 ms | 27.36 ms | 9.57 ms | 220.06 ms |
+| Scenario / Metric | Requests / Status | p50 Latency | p90 Latency | p95 Latency | p99 Latency | Avg Latency | Max Latency |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Nominal Traffic (10 Tenants)** | **5,100 (100.0% 200 OK)** | 37.25 ms | 46.74 ms | 49.43 ms | 60.32 ms | 38.67 ms | 68.80 ms |
+| **Rate Limit Saturation** | **48,329 (100.0% 429)** | 3.49 ms | 8.18 ms | 9.83 ms | 14.26 ms | 4.19 ms | 207.01 ms |
+| **Noisy Tenant A (Saturated)** | **60,360 (100.0% 429)** | 3.54 ms | 8.26 ms | 9.91 ms | 14.11 ms | 4.22 ms | 207.07 ms |
+| **Tenant B (Isolated Neighbor)** | **472 (100.0% 200 OK)** | 36.49 ms | 43.15 ms | 47.44 ms | 57.74 ms | 37.77 ms | 75.11 ms |
+| **Gateway Latency Overhead** | - | **7.25 ms** | 16.74 ms | 19.43 ms | 30.32 ms | 8.67 ms | 38.80 ms |
 
 ---
 
@@ -124,15 +124,18 @@ The mock upstream LLM service injects a fixed `30ms` processing delay (`time.sle
 7. Response streaming and client transmission
 
 **Observations:**
-- **Minimum Gateway Overhead:** **0.61 ms (615 µs)** under low queue pressure.
-- **Median Overhead:** **6.83 ms** under sustained **2,065 requests/sec** load across 100 concurrent VUs on a single developer machine.
-- **Throttle Overhead:** When tokens are exhausted, the gateway short-circuits the request in **2.71 ms median** without proxying to upstream, protecting upstream LLM resources from cascading failures.
+- **Minimum Gateway Overhead:** **0.79 ms (791 µs)** under low queue pressure.
+- **Median Overhead:** **7.25 ms** under sustained **1,884 requests/sec** load across 100 concurrent VUs on a single developer machine.
+- **Throttle Overhead:** When tokens are exhausted, the gateway short-circuits the request in **3.49 ms median** (p99: 14.26ms) without proxying to upstream, protecting upstream LLM resources from cascading failures.
 
 ---
 
 ### 5.4 Multi-Tenant Noisy Neighbor Isolation
 
 The load test conclusively proves strict tenant isolation:
+- While **Tenant A** was bombarded with **60,360 requests** that triggered continuous rate-limiting (100.0% 429s), **Tenant B** was simultaneously receiving continuous traffic.
+- **Tenant B experienced 0 dropped requests and 100.00% HTTP 200 OK responses (472 / 472).**
+- **Tenant B median latency (36.49 ms) was lower than the nominal multi-tenant baseline (37.25 ms)**, confirming that heavy traffic from a noisy neighbor has no negative impact on conforming tenants.
 - While **Tenant A** was bombarded with **70,026 requests** that triggered continuous rate-limiting (100.0% 429s), **Tenant B** was simultaneously receiving continuous traffic.
 - **Tenant B experienced 0 dropped requests and 100.00% HTTP 200 OK responses.**
 - **Tenant B median latency (35.71 ms) was actually lower than the nominal multi-tenant baseline (36.83 ms)**, confirming that heavy traffic from a noisy neighbor has no negative impact on conforming tenants.
