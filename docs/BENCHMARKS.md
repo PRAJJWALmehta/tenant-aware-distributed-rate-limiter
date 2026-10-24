@@ -7,11 +7,11 @@ This report documents the empirical performance, concurrency characteristics, an
 Load tests were executed using [Grafana k6](https://k6.io/) against the multi-container Docker Compose topology (`gateway`, `redis`, `mock-upstream`). The gateway was subjected to sustained high-concurrency traffic across three discrete real-world scenarios: **nominal multi-tenant traffic**, **high-velocity single-tenant saturation**, and **concurrent noisy-neighbor tenant isolation**.
 
 ### Key Findings
-- **Sustained Throughput:** Sustained **2,025.78 requests per second (RPS)** under 100 concurrent Virtual Users (VUs) for 60 seconds with **zero dropped requests or network connection errors** (**122,731 total requests completed**).
-- **Gateway Processing Overhead (< 5ms SLA):** The gateway achieves a **p50 overhead of 0.77ms** (sub-millisecond) and a **p95 overhead of 4.97ms**, strictly satisfying the **< 5ms SLA target** under full 2,000+ RPS multi-tenant load.
-- **Throttling Accuracy:** **100.00% assertion precision** on HTTP 429 Too Many Requests responses across 117,106 intentional burst saturation requests with zero false negatives or token leakages.
-- **Noisy Neighbor Isolation:** Saturated traffic on Tenant A (100.00% 429s across 65,056 requests) caused **0% degradation** to conforming Tenant B (100.00% 200 OK sustained with p50 latency of 35.55ms, outperforming baseline nominal p50).
-- **Gateway Decision Overhead:** 429 rate limit rejections were evaluated and returned in a median of **2.03ms** (p90: 5.76ms, p95: 7.21ms), protecting upstream LLM infrastructure from unnecessary compute load.
+- **Sustained Throughput:** Sustained **2,006.68 requests per second (RPS)** under 100 concurrent Virtual Users (VUs) for 60 seconds with **zero dropped requests or network connection errors** (**121,557 total requests completed**).
+- **Gateway Processing Overhead (< 5ms SLA):** The gateway achieves a **p50 overhead of 0.51ms** (sub-millisecond) and a **p95 overhead of 3.62ms**, strictly satisfying the **< 5ms SLA target** under full 2,000+ RPS multi-tenant load.
+- **Throttling Accuracy:** **100.00% assertion precision** on HTTP 429 Too Many Requests responses across 115,943 intentional burst saturation requests with zero false negatives or token leakages.
+- **Noisy Neighbor Isolation:** Saturated traffic on Tenant A (100.00% 429s across 64,418 requests) caused **0% degradation** to conforming Tenant B (100.00% 200 OK sustained with p50 latency of 35.27ms, outperforming baseline nominal p50).
+- **Gateway Decision Overhead:** 429 rate limit rejections were evaluated and returned in a median of **2.13ms** (p90: 6.06ms, p95: 7.55ms), protecting upstream LLM infrastructure from unnecessary compute load.
 
 ---
 
@@ -91,12 +91,12 @@ The suite (`benchmarks/k6-load-test.js`) defines discrete scenarios running conc
 | :--- | :--- | :--- | :--- |
 | **Duration** | 60 seconds | 60 seconds | Completed |
 | **Concurrent VUs** | 100 VUs | 100–300 VUs | Satisfied |
-| **Total Requests** | **122,731** | > 50,000 | **Exceeded** |
-| **Sustained RPS** | **2,025.78 req/s** | > 1,000 req/s | **Exceeded** |
-| **Check Assertions** | **122,731 / 122,731 (100.00%)** | > 99.00% | **100.00% Pass** |
+| **Total Requests** | **121,557** | > 50,000 | **Exceeded** |
+| **Sustained RPS** | **2,006.68 req/s** | > 1,000 req/s | **Exceeded** |
+| **Check Assertions** | **121,557 / 121,557 (100.00%)** | > 99.00% | **100.00% Pass** |
 | **Network Errors** | **0 (0.00%)** | 0 | **Flawless** |
-| **Gateway Overhead p50** | **0.77 ms** | < 5.00 ms | **PASS** |
-| **Gateway Overhead p95** | **4.97 ms** | < 5.00 ms | **PASS** |
+| **Gateway Overhead p50** | **0.51 ms** | < 5.00 ms | **PASS** |
+| **Gateway Overhead p95** | **3.62 ms** | < 5.00 ms | **PASS** |
 
 ---
 
@@ -106,11 +106,11 @@ Captured directly from `benchmarks/results/full_summary.json` and `benchmarks/re
 
 | Metric / Scenario | Count / Rate | p50 | p90 | p95 | p99 | Avg | Max | SLA Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Gateway Overhead (< 5ms SLA)** | - | **0.77 ms** | **3.25 ms** | **4.97 ms** | 13.76 ms | 1.52 ms | 22.23 ms | **PASS (<5ms)** |
-| **Nominal Traffic (10 Tenants)** | 5,150 (100.0% 200 OK) | 36.22 ms | 43.84 ms | 47.33 ms | 57.72 ms | 37.69 ms | 97.64 ms | **PASS** |
-| **Tenant B (Isolated Neighbor)** | 475 (100.0% 200 OK) | 35.55 ms | 41.75 ms | 44.05 ms | 54.58 ms | 36.79 ms | 89.99 ms | **PASS** |
-| **Tenant A (Noisy Saturated)** | 65,056 (100.0% 429 Blocked) | 2.04 ms | 5.77 ms | 7.20 ms | 10.96 ms | 2.76 ms | 61.69 ms | **PASS** |
-| **Single-Tenant Saturation** | 52,050 (100.0% 429 Blocked) | 2.03 ms | 5.76 ms | 7.21 ms | 10.93 ms | 2.75 ms | 65.50 ms | **PASS** |
+| **Gateway Overhead (< 5ms SLA)** | - | **0.51 ms** | **2.29 ms** | **3.62 ms** | 10.48 ms | 1.11 ms | 48.96 ms | **PASS (<5ms)** |
+| **Nominal Traffic (10 Tenants)** | 5,139 (100.0% 200 OK) | 35.96 ms | 43.69 ms | 47.19 ms | 78.19 ms | 37.68 ms | 95.53 ms | **PASS** |
+| **Tenant B (Isolated Neighbor)** | 475 (100.0% 200 OK) | 35.27 ms | 40.80 ms | 42.98 ms | 56.39 ms | 36.48 ms | 93.03 ms | **PASS** |
+| **Tenant A (Noisy Saturated)** | 64,418 (100.0% 429 Blocked) | 2.14 ms | 6.07 ms | 7.53 ms | 12.21 ms | 2.93 ms | 62.22 ms | **PASS** |
+| **Single-Tenant Saturation** | 51,525 (100.0% 429 Blocked) | 2.13 ms | 6.06 ms | 7.55 ms | 12.48 ms | 2.94 ms | 61.26 ms | **PASS** |
 
 ---
 
@@ -127,19 +127,19 @@ To eliminate upstream latency interference and measure true gateway performance,
   $$\text{Overhead} = \frac{\Delta t_{\text{total}}}{1,000,000.0}\text{ ms}$$
 
 #### SLA Compliance Validation
-- **p50 Overhead:** **0.77 ms** (Sub-millisecond processing at median)
-- **p90 Overhead:** **3.25 ms**
-- **p95 Overhead:** **4.97 ms** (Strictly within the **< 5.00 ms SLA target**)
-- **Average Overhead:** **1.52 ms**
+- **p50 Overhead:** **0.51 ms** (Sub-millisecond processing at median)
+- **p90 Overhead:** **2.29 ms**
+- **p95 Overhead:** **3.62 ms** (Strictly within the **< 5.00 ms SLA target**)
+- **Average Overhead:** **1.11 ms**
 
 ---
 
 ### 5.4 Multi-Tenant Noisy Neighbor Isolation
 
 The load test conclusively proves strict tenant isolation under extreme stress:
-- While **Tenant A** was bombarded with **65,056 requests** triggering continuous rate-limiting (100.0% 429s), **Tenant B** was simultaneously receiving continuous traffic.
+- While **Tenant A** was bombarded with **64,418 requests** triggering continuous rate-limiting (100.0% 429s), **Tenant B** was simultaneously receiving continuous traffic.
 - **Tenant B experienced 0 dropped requests and 100.00% HTTP 200 OK responses (475 / 475).**
-- **Tenant B median latency (35.55 ms) was slightly lower than the nominal multi-tenant baseline (36.22 ms)**, confirming that heavy traffic from a noisy neighbor has zero negative impact on conforming tenants.
+- **Tenant B median latency (35.27 ms) was slightly lower than the nominal multi-tenant baseline (35.96 ms)**, confirming that heavy traffic from a noisy neighbor has zero negative impact on conforming tenants.
 
 ---
 
