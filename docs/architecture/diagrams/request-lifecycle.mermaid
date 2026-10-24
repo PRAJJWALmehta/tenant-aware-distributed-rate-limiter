@@ -1,0 +1,64 @@
+flowchart TD
+    %% Request Lifecycle and Architecture
+    Client(["Client HTTP Request (POST /v1/chat/completions)"]) --> Filter["TenantFilter (WebFilter)"]
+
+    subgraph Identity ["1. Tenant Identification Filter"]
+        Filter --> CheckHeader{"Header Present?<br/>X-Tenant-Id"}
+        CheckHeader -- "Yes" --> SetTenantCtx["Bind Tenant ID to Reactor Context"]
+        CheckHeader -- "No" --> CheckFallback{"IP Fallback Enabled?<br/>ratelimiter.fallback.ip.enabled"}
+        CheckFallback -- "Yes (true)" --> ResolveIP["Resolve Client IP<br/>(X-Forwarded-For or RemoteAddress)"]
+        ResolveIP --> SetTenantCtx
+        CheckFallback -- "No (false)" --> Return401["Reject: 401 Unauthorized<br/>(Missing Tenant Context)"]
+    end
+
+    subgraph Parsing ["2. Streaming Token Estimation"]
+        SetTenantCtx --> TokenParser["TokenEstimator (Service)"]
+        TokenParser --> ReadStream["Stream JSON Byte Array<br/>(Zero-DOM O(1) Memory)"]
+        ReadStream --> ParseCheck{"Contains 'max_tokens'?"}
+        ParseCheck -- "Yes" --> UseMaxTokens["Estimate = max_tokens"]
+        ParseCheck -- "No" --> FallbackPrompt["Estimate = prompt.length() + defaultBuffer"]
+        UseMaxTokens --> CostCalculated["Token Reservation Resolved (N)"]
+        FallbackPrompt --> CostCalculated
+    end
+
+    subgraph Evaluation ["3. Atomic Distributed Rate Limiting"]
+        CostCalculated --> RateService["RateLimitService (Lettuce Reactive)"]
+        RateService --> RedisExec["Execute Lua Script (token_bucket.lua via EVALSHA)"]
+        RedisExec --> RedisKey[("Redis Hash: rate_limit:{tenantId}<br/>- tokens<br/>- last_refill_ts")]
+        RedisKey --> LuaLogic{"Current Tokens >= Requested?"}
+        LuaLogic -- "Yes (allowed = 1)" --> Deduct["Atomic Decrement & Refresh TTL<br/>Return 1"]
+        LuaLogic -- "No (allowed = 0)" --> RejectQuota["Retain Tokens & Refresh TTL<br/>Return 0"]
+    end
+
+    subgraph Routing ["4. Upstream Routing & Telemetry"]
+        Deduct --> UpstreamCheck{"Upstream Configured?"}
+        UpstreamCheck -- "Yes" --> WebClientProxy["WebClient Reactive Proxy<br/>(Forward to Upstream LLM)"]
+        WebClientProxy --> UpstreamLLM[("Upstream LLM Service / Mock<br/>(port 8081)")]
+        UpstreamLLM --> ComputeOverhead["Compute X-Gateway-Overhead-Ms<br/>(Total Duration - Upstream Duration)"]
+        ComputeOverhead --> Client200["Return 200 OK<br/>+ Payload & X-Gateway-Overhead-Ms"]
+
+        UpstreamCheck -- "No" --> Standalone200["Return 200 OK<br/>+ X-Gateway-Overhead-Ms"]
+
+        RejectQuota --> Return429["Return 429 Too Many Requests<br/>+ X-Gateway-Overhead-Ms<br/>'Rate limit exceeded'"]
+        RedisExec -. "Connection Failure" .-> FailOpenFallback{"Fail-Open Policy?"}
+        FailOpenFallback -. "Fail-Open (Graceful Degradation)" .-> WebClientProxy
+        FailOpenFallback -. "Fail-Closed" .-> Return503["Return 503 Service Unavailable"]
+    end
+
+    Return401 --> ClientResponse(["Downstream Client Response"])
+    Client200 --> ClientResponse
+    Standalone200 --> ClientResponse
+    Return429 --> ClientResponse
+    Return503 --> ClientResponse
+
+    classDef primary fill:#e1f5fe,stroke:#0288d1,stroke-width:2px,color:#01579b;
+    classDef success fill:#e8f5e9,stroke:#388e3c,stroke-width:2px,color:#1b5e20;
+    classDef warning fill:#fff3e0,stroke:#f57c00,stroke-width:2px,color:#e65100;
+    classDef danger fill:#ffebee,stroke:#d32f2f,stroke-width:2px,color:#b71c1c;
+    classDef storage fill:#ede7f6,stroke:#512da8,stroke-width:2px,color:#311b92;
+
+    class Filter,TokenParser,RateService,WebClientProxy primary;
+    class Client200,Standalone200 success;
+    class Return429,FailOpenFallback warning;
+    class Return401,Return503 danger;
+    class RedisKey,UpstreamLLM storage;

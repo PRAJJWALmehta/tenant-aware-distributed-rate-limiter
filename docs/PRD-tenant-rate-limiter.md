@@ -48,6 +48,6 @@ Based on architectural best practices for 100k+ RPS systems and SDE-2 interview 
 - [x] Phase 4: Redis Token Bucket Lua Script & RateLimitService
 - [x] Phase 5: Routing Integration & Gateway Error Handling
 - [x] Phase 6: Docker Containerization & Local Multi-Container Environment
-- [ ] Phase 7: Concurrency & Performance Load Testing (`k6`) with Benchmark Report
-- [ ] Phase 8: System Architecture & Data Flow Visual Documentation
+- [x] Phase 7: Concurrency & Performance Load Testing (`k6`) with Benchmark Report
+- [x] Phase 8: System Architecture & Data Flow Visual Documentation
 - [ ] Phase 9: Production Flagship `README.md` & 5-Minute Interview Walkthrough Guide

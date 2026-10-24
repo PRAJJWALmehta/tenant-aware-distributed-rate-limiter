@@ -1,0 +1,72 @@
+sequenceDiagram
+    autonumber
+    actor Client as Client Application
+    participant TF as TenantFilter
+    participant GW as GatewayApplication
+    participant TE as TokenEstimator
+    participant RLS as RateLimitService
+    participant Redis as Redis (token_bucket.lua)
+    participant Upstream as Upstream LLM Router / Mock
+
+    %% Sequence 1: Happy Path
+    rect rgb(232, 245, 233)
+    Note over Client, Upstream: Sequence 1: Happy Path (200 OK + Token Deduction)
+    Client->>TF: POST /v1/chat/completions (X-Tenant-Id: tenant-a, max_tokens: 25)
+    TF->>TF: Extract X-Tenant-Id header ('tenant-a')
+    TF->>GW: Forward exchange with Context(tenantId = 'tenant-a')
+    GW->>TE: estimate(bodyBytes)
+    TE-->>GW: Estimated tokens = 25
+    GW->>RLS: isAllowed("tenant-a", 25)
+    RLS->>Redis: EVALSHA token_bucket.lua (keys=[rate_limit:tenant-a], args=[25, 100, 10])
+    Redis-->>RLS: 1 (Tokens deducted: balance decreases from 100 to 75)
+    RLS-->>GW: Mono.just(true)
+    GW->>Upstream: WebClient.POST /v1/chat/completions (stream body)
+    Upstream-->>GW: 200 OK ({"choices": [{"text": "Mock LLM response"}]})
+    GW->>GW: Compute overhead: totalDuration - upstreamDuration
+    GW-->>Client: 200 OK + LLM Response Body + X-Gateway-Overhead-Ms: 1.42
+    end
+
+    %% Sequence 2: Budget Exhausted
+    rect rgb(255, 243, 224)
+    Note over Client, Upstream: Sequence 2: Budget Exhausted (429 Too Many Requests)
+    Client->>TF: POST /v1/chat/completions (X-Tenant-Id: tenant-b, max_tokens: 50)
+    TF->>TF: Extract X-Tenant-Id header ('tenant-b')
+    TF->>GW: Forward exchange with Context(tenantId = 'tenant-b')
+    GW->>TE: estimate(bodyBytes)
+    TE-->>GW: Estimated tokens = 50
+    GW->>RLS: isAllowed("tenant-b", 50)
+    RLS->>Redis: EVALSHA token_bucket.lua (keys=[rate_limit:tenant-b], args=[50, 100, 10])
+    Note over Redis: Current tokens (20) < Requested (50) -> Quota Denied
+    Redis-->>RLS: 0 (No tokens deducted; balance remains 20)
+    RLS-->>GW: Mono.just(false)
+    GW->>GW: Short-circuit (upstream request aborted)
+    GW-->>Client: 429 Too Many Requests ("Rate limit exceeded" + X-Gateway-Overhead-Ms)
+    end
+
+    %% Sequence 3: Missing Tenant Header with IP Fallback Disabled
+    rect rgb(255, 235, 238)
+    Note over Client, Upstream: Sequence 3: Missing Tenant Header with IP Fallback Disabled (401 Unauthorized)
+    Client->>TF: POST /v1/chat/completions (No X-Tenant-Id header)
+    TF->>TF: Check ratelimiter.fallback.ip.enabled == false
+    TF-->>Client: 401 Unauthorized (Pipeline halted immediately; 0 memory parsing, 0 Redis queries)
+    end
+
+    %% Sequence 4: Redis Connection Failure (Fail-Open Path)
+    rect rgb(225, 245, 254)
+    Note over Client, Upstream: Sequence 4: Redis Connection Failure (Graceful Degradation / Fail-Open)
+    Client->>TF: POST /v1/chat/completions (X-Tenant-Id: tenant-c, max_tokens: 30)
+    TF->>TF: Extract X-Tenant-Id header ('tenant-c')
+    TF->>GW: Forward exchange with Context(tenantId = 'tenant-c')
+    GW->>TE: estimate(bodyBytes)
+    TE-->>GW: Estimated tokens = 30
+    GW->>RLS: isAllowed("tenant-c", 30)
+    RLS->>Redis: EVALSHA token_bucket.lua
+    Redis--xRLS: RedisConnectionException / Network Timeout
+    RLS-->>GW: Mono.error(RedisConnectionException)
+    GW->>GW: Fallback: Fail-Open Resilience Circuit
+    Note over GW: Log WARN: Redis cluster degraded. Failing open to protect upstream availability.
+    GW->>Upstream: WebClient.POST /v1/chat/completions (proxy upstream)
+    Upstream-->>GW: 200 OK ({"choices": [...]})
+    GW->>GW: Attach X-Gateway-Overhead-Ms + X-RateLimit-Degraded: true
+    GW-->>Client: 200 OK + LLM Response Body + Degraded Telemetry Header
+    end
