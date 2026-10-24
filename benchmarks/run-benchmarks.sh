@@ -189,7 +189,7 @@ tenant_b_200_pct = get_rate('isolated_tenant_b_200_rate')
 csv_rows = [
     ["Metric", "Count / Rate", "p50 (ms)", "p90 (ms)", "p95 (ms)", "p99 (ms)", "Avg (ms)", "Max (ms)"],
     ["Total HTTP Requests", f"{total_reqs} ({rps} req/s)", "-", "-", "-", "-", "-", "-"],
-    ["Gateway Overhead (<5ms SLA)", "-", nominal_overhead['med'], nominal_overhead['p90'], nominal_overhead['p95'], nominal_overhead['p99'], nominal_overhead['avg'], nominal_overhead['max']],
+    ["Gateway Overhead (p50<2ms, p95<5ms, p99<15ms SLO)", "-", nominal_overhead['med'], nominal_overhead['p90'], nominal_overhead['p95'], nominal_overhead['p99'], nominal_overhead['avg'], nominal_overhead['max']],
     ["Nominal Traffic Latency", f"{nominal_success_pct}% 200 OK", nominal_lat['med'], nominal_lat['p90'], nominal_lat['p95'], nominal_lat['p99'], nominal_lat['avg'], nominal_lat['max']],
     ["Tenant B (Isolated)", f"{tenant_b_200_pct}% 200 OK", isolated_b_lat['med'], isolated_b_lat['p90'], isolated_b_lat['p95'], isolated_b_lat['p99'], isolated_b_lat['avg'], isolated_b_lat['max']],
     ["Tenant A (Noisy Saturated)", f"{noisy_a_429_pct}% 429 Blocked", noisy_a_lat['med'], noisy_a_lat['p90'], noisy_a_lat['p95'], noisy_a_lat['p99'], noisy_a_lat['avg'], noisy_a_lat['max']],
@@ -200,19 +200,23 @@ with open(csv_output_path, 'w', newline='') as f:
     writer = csv.writer(f)
     writer.writerows(csv_rows)
 
-print("\n" + "=" * 88)
-print(f"BENCHMARK RESULTS SUMMARY (Sustained RPS: {rps} req/s | Total Requests: {total_reqs})")
-print("=" * 88)
-print(f"{'Metric':<30} | {'Rate/Status':<14} | {'p50':<7} | {'p95':<7} | {'p99':<7} | {'SLA Status'}")
-print("-" * 88)
+p50_ok = nominal_overhead['med'] < 2.0
+p95_ok = nominal_overhead['p95'] < 5.0
+p99_ok = nominal_overhead['p99'] < 15.0
+all_slo_ok = p50_ok and p95_ok and p99_ok
+slo_summary = "PASS (p50<2ms, p95<5ms, p99<15ms)" if all_slo_ok else f"FAIL (p50={nominal_overhead['med']}, p95={nominal_overhead['p95']}, p99={nominal_overhead['p99']})"
 
-sla_status = "PASS (<5ms)" if nominal_overhead['med'] < 5.0 else f"OVERHEAD ({nominal_overhead['med']}ms)"
-print(f"{'Gateway Latency Overhead':<30} | {'-':<14} | {str(nominal_overhead['med']) + 'ms':<7} | {str(nominal_overhead['p95']) + 'ms':<7} | {str(nominal_overhead['p99']) + 'ms':<7} | {sla_status}")
+print("\n" + "=" * 98)
+print(f"BENCHMARK RESULTS SUMMARY (Sustained RPS: {rps} req/s | Total Requests: {total_reqs})")
+print("=" * 98)
+print(f"{'Metric':<30} | {'Rate/Status':<14} | {'p50':<7} | {'p95':<7} | {'p99':<7} | {'SLO Compliance'}")
+print("-" * 98)
+print(f"{'Gateway Latency Overhead':<30} | {'-':<14} | {str(nominal_overhead['med']) + 'ms':<7} | {str(nominal_overhead['p95']) + 'ms':<7} | {str(nominal_overhead['p99']) + 'ms':<7} | {slo_summary}")
 print(f"{'Nominal Traffic (10 Tenants)':<30} | {str(nominal_success_pct) + '% 200':<14} | {str(nominal_lat['med']) + 'ms':<7} | {str(nominal_lat['p95']) + 'ms':<7} | {str(nominal_lat['p99']) + 'ms':<7} | PASS")
 print(f"{'Rate Limit Saturation':<30} | {str(saturation_429_pct) + '% 429':<14} | {str(saturation_lat['med']) + 'ms':<7} | {str(saturation_lat['p95']) + 'ms':<7} | {str(saturation_lat['p99']) + 'ms':<7} | PASS")
 print(f"{'Tenant B (Isolated Neighbor)':<30} | {str(tenant_b_200_pct) + '% 200':<14} | {str(isolated_b_lat['med']) + 'ms':<7} | {str(isolated_b_lat['p95']) + 'ms':<7} | {str(isolated_b_lat['p99']) + 'ms':<7} | PASS")
 print(f"{'Tenant A (Noisy Saturated)':<30} | {str(noisy_a_429_pct) + '% 429':<14} | {str(noisy_a_lat['med']) + 'ms':<7} | {str(noisy_a_lat['p95']) + 'ms':<7} | {str(noisy_a_lat['p99']) + 'ms':<7} | PASS")
-print("=" * 88)
+print("=" * 98)
 print(f"Summary metrics exported to CSV: {csv_output_path}\n")
 EOF
 

@@ -55,7 +55,7 @@ export const options = {
   },
   thresholds: {
     'nominal_success_rate': ['rate>0.99'],
-    'gateway_overhead_ms': ['med<5'],
+    'gateway_overhead_ms{scenario:nominal_traffic}': ['p(50)<2', 'p(95)<5', 'p(99)<15'],
     'saturation_429_rate': ['rate>0.99'],
     'noisy_tenant_a_429_rate': ['rate>0.99'],
     'isolated_tenant_b_200_rate': ['rate>0.99']

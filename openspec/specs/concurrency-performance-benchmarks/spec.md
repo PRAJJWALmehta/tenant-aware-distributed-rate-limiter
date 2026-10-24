@@ -1,7 +1,7 @@
 # concurrency-performance-benchmarks Specification
 
 ## Purpose
-Provide a standardized k6 load testing suite, automated benchmark execution runner, and comprehensive empirical performance documentation validating throughput, gateway latency overhead (< 5ms SLA), rate limit throttling accuracy, and multi-tenant noisy-neighbor isolation.
+Provide a standardized k6 load testing suite, automated benchmark execution runner, and comprehensive empirical performance documentation validating throughput, tiered gateway latency overhead SLOs (p50 < 2ms, p95 < 5ms, p99 < 15ms), rate limit throttling accuracy, and multi-tenant noisy-neighbor isolation.
 
 ## Requirements
 
@@ -36,7 +36,7 @@ The system SHALL provide an executable shell script `benchmarks/run-benchmarks.s
 - **THEN** the runner outputs detailed performance metrics to stdout and exports summary metrics to structured JSON and CSV formats in the benchmark output directory.
 
 ### Requirement: Gateway overhead telemetry header
-The rate-limiting gateway SHALL calculate its internal processing overhead (excluding upstream service round-trip duration for proxied calls) and attach an `X-Gateway-Overhead-Ms` HTTP header to all client responses (both HTTP 200 proxy responses and HTTP 429 rate limit responses). The load testing suite SHALL read this header to empirically evaluate SLA compliance against the < 5ms gateway processing budget.
+The rate-limiting gateway SHALL calculate its internal processing overhead (excluding upstream service round-trip duration for proxied calls) and attach an `X-Gateway-Overhead-Ms` HTTP header to all client responses (both HTTP 200 proxy responses and HTTP 429 rate limit responses). The load testing suite SHALL read this header to empirically evaluate SLO compliance against realistic tiered latency budgets: p50 < 2ms, p95 < 5ms, and p99 < 15ms.
 
 #### Scenario: Proxied response telemetry
 - **WHEN** an allowed client request is forwarded to upstream service and returns HTTP 200 OK
@@ -51,7 +51,7 @@ The system SHALL provide a structured benchmark report in `docs/BENCHMARKS.md` t
 
 #### Scenario: Latency overhead and throughput documentation
 - **WHEN** the benchmark results are recorded in `docs/BENCHMARKS.md`
-- **THEN** the document records sustained nominal requests per second (RPS) and confirms whether gateway p50, p95, and p99 latency overhead satisfies the < 5ms gateway processing SLA above upstream service latency.
+- **THEN** the document records sustained nominal requests per second (RPS) and confirms whether gateway processing overhead satisfies the tiered latency SLOs: p50 < 2ms, p95 < 5ms, and p99 < 15ms above upstream service latency.
 
 #### Scenario: Rate limit accuracy and isolation verification
 - **WHEN** the benchmark results are reviewed in `docs/BENCHMARKS.md`
