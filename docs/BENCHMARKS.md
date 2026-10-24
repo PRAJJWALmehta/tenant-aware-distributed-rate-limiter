@@ -185,3 +185,13 @@ Expected output:
 - Generation of `benchmarks/results/full_summary.json` and `benchmarks/results/benchmark_summary.csv`
 - ASCII formatted performance summary table printed to console confirming:
   `PASS (p50<2ms, p95<5ms, p99<15ms)`
+
+---
+
+## 7. Related Documentation & Architecture Deep Dives
+
+- **System Architecture & Trade-Offs:** [`docs/architecture/ARCHITECTURE.md`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/architecture/ARCHITECTURE.md) (Deep dive into Jackson streaming memory safety, single Redis Lua atomicity, and WebFlux Netty event loops).
+- **Request Lifecycle Diagram:** [`docs/architecture/diagrams/request-lifecycle.mermaid`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/architecture/diagrams/request-lifecycle.mermaid)
+- **Sequence Flows Diagram:** [`docs/architecture/diagrams/sequence-flows.mermaid`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/architecture/diagrams/sequence-flows.mermaid)
+- **Product Requirements Document (PRD):** [`docs/PRD-tenant-rate-limiter.md`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/PRD-tenant-rate-limiter.md)
+- **Implementation Plan:** [`docs/plan-tenant-rate-limiter.md`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/plan-tenant-rate-limiter.md)

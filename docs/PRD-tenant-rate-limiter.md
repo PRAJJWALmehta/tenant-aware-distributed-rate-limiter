@@ -17,7 +17,7 @@ Based on architectural best practices for 100k+ RPS systems and SDE-2 interview 
 - **Tenant Identification:** Identified via the `X-Tenant-Id` HTTP header, with an automatic fallback to client IP (via `X-Forwarded-For` or remote connection IP) when missing.
 - **Dynamic Payload Estimation:** If `max_tokens` is present in the JSON payload, it is extracted as the token budget reservation. If missing, the cost is dynamically estimated from the character length of the `prompt` plus a configurable default buffer.
 - **Pre-Routing Token Reservation:** To preserve extreme throughput and non-blocking backpressure, token costs are estimated and reserved upfront *before* routing to the upstream LLM.
-- **Fail-Open Resilience:** If Redis becomes unavailable, the gateway fails open (passes requests with warning headers/logs) rather than causing a complete upstream outage.
+- **Fail-Closed Resilience Defense:** If Redis becomes unavailable, the gateway fails closed (returns HTTP 503 Service Unavailable) to protect upstream LLM APIs from unbudgeted token consumption and financial runaway. Configurable fail-open policies can be enabled for availability-prioritized tiers.
 
 ## Non-Functional Requirements & Performance Targets
 - **Gateway Overhead:** < 5ms p95 latency added to requests under nominal load.
@@ -35,7 +35,7 @@ Based on architectural best practices for 100k+ RPS systems and SDE-2 interview 
 7. **As an interviewer / code reviewer**, I want clear architecture diagrams, design trade-off rationales, and an interactive 5-minute demo script showcasing edge cases.
 
 ## Edge Cases Handled
-1. **Redis Unavailability:** Gateway fails open, allowing traffic to pass through gracefully to prevent total outage.
+1. **Redis Unavailability:** Gateway enforces Fail-Closed defense (503 Service Unavailable) to protect budgets, with optional configurable fail-open degradation.
 2. **Missing Payload Fields:** Graceful fallback to prompt length token estimation.
 3. **Invalid JSON / Malformed Payloads:** Rejected immediately with 400 Bad Request before hitting Redis or upstream.
 4. **Upstream Timeouts:** Strict non-blocking timeouts enforced to return 504 Gateway Timeout.
@@ -48,6 +48,16 @@ Based on architectural best practices for 100k+ RPS systems and SDE-2 interview 
 - [x] Phase 4: Redis Token Bucket Lua Script & RateLimitService
 - [x] Phase 5: Routing Integration & Gateway Error Handling
 - [x] Phase 6: Docker Containerization & Local Multi-Container Environment
-- [ ] Phase 7: Concurrency & Performance Load Testing (`k6`) with Benchmark Report
-- [ ] Phase 8: System Architecture & Data Flow Visual Documentation
+- [x] Phase 7: Concurrency & Performance Load Testing (`k6`) with Benchmark Report
+- [x] Phase 8: System Architecture & Data Flow Visual Documentation
 - [ ] Phase 9: Production Flagship `README.md` & 5-Minute Interview Walkthrough Guide
+
+---
+
+## Related Documentation & Architecture Artifacts
+- **System Architecture Deep Dive:** [`docs/architecture/ARCHITECTURE.md`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/architecture/ARCHITECTURE.md)
+- **Request Lifecycle Diagram:** [`docs/architecture/diagrams/request-lifecycle.mermaid`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/architecture/diagrams/request-lifecycle.mermaid)
+- **Sequence Flows Diagram:** [`docs/architecture/diagrams/sequence-flows.mermaid`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/architecture/diagrams/sequence-flows.mermaid)
+- **Concurrency & Performance Benchmarks:** [`docs/BENCHMARKS.md`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/BENCHMARKS.md)
+- **Implementation Plan:** [`docs/plan-tenant-rate-limiter.md`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/plan-tenant-rate-limiter.md)
+- **Future Enhancements:** [`docs/future-enhancements.md`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/future-enhancements.md)

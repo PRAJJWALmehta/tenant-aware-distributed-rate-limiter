@@ -232,31 +232,31 @@ git commit -m "feat: add k6 load testing suite and performance benchmark report"
 - Create: `docs/architecture/diagrams/request-lifecycle.mermaid`
 - Create: `docs/architecture/diagrams/sequence-flows.mermaid`
 
-- [ ] **Step 1: Draft Mermaid component & request lifecycle diagram**
+- [x] **Step 1: Draft Mermaid component & request lifecycle diagram**
 
 Create `docs/architecture/diagrams/request-lifecycle.mermaid`:
 - Client -> `TenantFilter` (Extract `X-Tenant-Id` / Fallback to IP) -> `TokenEstimator` (Jackson Streaming `max_tokens` / prompt) -> `RateLimitService` (Lettuce Reactive Redis Lua) -> Upstream LLM Router / 429 Handler.
 
-- [ ] **Step 2: Draft Mermaid sequence diagram for request flows**
+- [x] **Step 2: Draft Mermaid sequence diagram for request flows**
 
 Create `docs/architecture/diagrams/sequence-flows.mermaid`:
 - Sequence 1: Happy path (200 OK + token deduction)
 - Sequence 2: Budget exhausted (429 Too Many Requests)
 - Sequence 3: Missing tenant header with IP fallback disabled (401 Unauthorized)
-- Sequence 4: Redis connection failure (Fail-open path)
+- Sequence 4: Redis connection failure (Fail-closed defense / 503 Service Unavailable)
 
-- [ ] **Step 3: Write comprehensive `ARCHITECTURE.md`**
+- [x] **Step 3: Write comprehensive `ARCHITECTURE.md`**
 
 Detail core engineering decisions and SDE-2 trade-offs:
 - *Memory Safety:* Streaming `JsonParser` vs `ObjectMapper.readTree()` (O(1) memory vs O(N) heap allocation).
 - *Atomicity:* Single Redis Lua script vs Distributed Locks / Redlock (eliminating two-phase lock contention and network roundtrips).
 - *Reactive Pipeline:* Spring WebFlux / Reactor Netty event loops vs blocking Servlet threads (100k+ concurrent connections with minimal threads).
 
-- [ ] **Step 4: Verify diagrams and markdown rendering**
+- [x] **Step 4: Verify diagrams and markdown rendering**
 
 Verify all Mermaid syntax blocks render cleanly and match the production codebase.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/architecture/
