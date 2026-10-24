@@ -35,6 +35,17 @@ The system SHALL provide an executable shell script `benchmarks/run-benchmarks.s
 - **WHEN** the runner executes the full load test suite with 100 to 300 concurrent VUs sustained for 60 seconds
 - **THEN** the runner outputs detailed performance metrics to stdout and exports summary metrics to structured JSON and CSV formats in the benchmark output directory.
 
+### Requirement: Gateway overhead telemetry header
+The rate-limiting gateway SHALL calculate its internal processing overhead (excluding upstream service round-trip duration for proxied calls) and attach an `X-Gateway-Overhead-Ms` HTTP header to all client responses (both HTTP 200 proxy responses and HTTP 429 rate limit responses). The load testing suite SHALL read this header to empirically evaluate SLA compliance against the < 5ms gateway processing budget.
+
+#### Scenario: Proxied response telemetry
+- **WHEN** an allowed client request is forwarded to upstream service and returns HTTP 200 OK
+- **THEN** the gateway injects the `X-Gateway-Overhead-Ms` header reflecting total gateway processing time minus upstream network/processing duration.
+
+#### Scenario: Rate-limited response telemetry
+- **WHEN** a client request exceeds rate limit budget and returns HTTP 429 Too Many Requests
+- **THEN** the gateway injects the `X-Gateway-Overhead-Ms` header measuring the exact gateway rate limiter decision latency.
+
 ### Requirement: Benchmark performance report documentation
 The system SHALL provide a structured benchmark report in `docs/BENCHMARKS.md` that synthesizes empirical load test findings, assesses compliance with latency Service Level Objectives (SLOs), and provides the test hardware environment context.
 

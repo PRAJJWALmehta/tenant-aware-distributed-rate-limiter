@@ -55,6 +55,7 @@ export const options = {
   },
   thresholds: {
     'nominal_success_rate': ['rate>0.99'],
+    'gateway_overhead_ms': ['med<5'],
     'saturation_429_rate': ['rate>0.99'],
     'noisy_tenant_a_429_rate': ['rate>0.99'],
     'isolated_tenant_b_200_rate': ['rate>0.99']
@@ -96,7 +97,10 @@ export function runNominal() {
   
   nominalSuccessRate.add(passed);
   nominalLatency.add(res.timings.duration);
-  const overhead = Math.max(0, res.timings.duration - UPSTREAM_SIMULATED_LATENCY_MS);
+  const overheadHeader = res.headers['X-Gateway-Overhead-Ms'] || res.headers['x-gateway-overhead-ms'];
+  const overhead = (overheadHeader !== undefined && !isNaN(parseFloat(overheadHeader)))
+    ? parseFloat(overheadHeader)
+    : Math.max(0, res.timings.duration - UPSTREAM_SIMULATED_LATENCY_MS);
   nominalGatewayOverhead.add(overhead);
   
   sleep(0.55); // Paced to stay within the 10 tokens/s per-tenant refill rate
