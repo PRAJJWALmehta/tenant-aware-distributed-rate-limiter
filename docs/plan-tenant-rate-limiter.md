@@ -243,7 +243,7 @@ Create `docs/architecture/diagrams/sequence-flows.mermaid`:
 - Sequence 1: Happy path (200 OK + token deduction)
 - Sequence 2: Budget exhausted (429 Too Many Requests)
 - Sequence 3: Missing tenant header with IP fallback disabled (401 Unauthorized)
-- Sequence 4: Redis connection failure (Fail-open path)
+- Sequence 4: Redis connection failure (Fail-closed defense / 503 Service Unavailable)
 
 - [x] **Step 3: Write comprehensive `ARCHITECTURE.md`**
 
