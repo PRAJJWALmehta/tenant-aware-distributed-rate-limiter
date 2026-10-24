@@ -50,6 +50,7 @@ public class GatewayIntegrationTest {
                 .bodyValue("{\"max_tokens\": 25, \"prompt\": \"Hello world\"}")
                 .exchange()
                 .expectStatus().isOk()
+                .expectHeader().exists("X-Gateway-Overhead-Ms")
                 .expectBody(String.class).isEqualTo("OK");
 
         // Verify Redis bucket decreased from 100 to 75
@@ -95,7 +96,8 @@ public class GatewayIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue("{\"max_tokens\": 20}")
                 .exchange()
-                .expectStatus().isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+                .expectStatus().isEqualTo(HttpStatus.TOO_MANY_REQUESTS)
+                .expectHeader().exists("X-Gateway-Overhead-Ms");
 
         // Verify Redis balance remains 10 (no partial deduction)
         StepVerifier.create(redisTemplate.opsForHash().get("rate_limit:" + tenantId, "tokens"))

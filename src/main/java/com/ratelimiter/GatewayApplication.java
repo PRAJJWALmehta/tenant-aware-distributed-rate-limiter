@@ -43,8 +43,9 @@ public class GatewayApplication {
                 ? WebClient.builder().baseUrl(upstreamUrl).build()
                 : null;
 
-        return RouterFunctions.route(POST("/**"), request ->
-            Mono.deferContextual(ctx -> {
+        return RouterFunctions.route(POST("/**"), request -> {
+            long startNs = System.nanoTime();
+            return Mono.deferContextual(ctx -> {
                 String tenantId = ctx.getOrDefault(TenantFilter.TENANT_KEY, null);
                 if (tenantId == null || tenantId.isBlank()) {
                     return ServerResponse.status(HttpStatus.UNAUTHORIZED).build();
@@ -68,6 +69,7 @@ public class GatewayApplication {
                                     .flatMap(allowed -> {
                                         if (allowed) {
                                             if (webClient != null) {
+                                                long upstreamStartNs = System.nanoTime();
                                                 return webClient.post()
                                                         .uri(request.path())
                                                         .contentType(request.headers().contentType().orElse(MediaType.APPLICATION_JSON))
@@ -75,17 +77,22 @@ public class GatewayApplication {
                                                         .exchangeToMono(clientResponse -> 
                                                             clientResponse.bodyToMono(byte[].class)
                                                                     .defaultIfEmpty(new byte[0])
-                                                                    .flatMap(upstreamBody -> 
-                                                                        ServerResponse.status(clientResponse.statusCode())
+                                                                    .flatMap(upstreamBody -> {
+                                                                        long upstreamDurationNs = System.nanoTime() - upstreamStartNs;
+                                                                        long totalDurationNs = System.nanoTime() - startNs;
+                                                                        long overheadNs = Math.max(0, totalDurationNs - upstreamDurationNs);
+                                                                        double overheadMs = overheadNs / 1_000_000.0;
+                                                                        return ServerResponse.status(clientResponse.statusCode())
                                                                                 .headers(headers -> {
                                                                                     clientResponse.headers().asHttpHeaders().forEach((name, values) -> {
                                                                                         if (!name.equalsIgnoreCase("Transfer-Encoding") && !name.equalsIgnoreCase("Content-Length")) {
                                                                                             headers.addAll(name, values);
                                                                                         }
                                                                                     });
+                                                                                    headers.set("X-Gateway-Overhead-Ms", String.format(java.util.Locale.US, "%.2f", overheadMs));
                                                                                 })
-                                                                                .bodyValue(upstreamBody)
-                                                                    )
+                                                                                .bodyValue(upstreamBody);
+                                                                    })
                                                         )
                                                         .onErrorResume(e -> {
                                                             log.error("Upstream proxy request failed for tenant {}", tenantId, e);
@@ -93,9 +100,16 @@ public class GatewayApplication {
                                                                     .bodyValue("Bad Gateway");
                                                         });
                                             }
-                                            return ServerResponse.ok().bodyValue("OK");
+                                            long overheadNs = Math.max(0, System.nanoTime() - startNs);
+                                            double overheadMs = overheadNs / 1_000_000.0;
+                                            return ServerResponse.ok()
+                                                    .header("X-Gateway-Overhead-Ms", String.format(java.util.Locale.US, "%.2f", overheadMs))
+                                                    .bodyValue("OK");
                                         } else {
+                                            long overheadNs = Math.max(0, System.nanoTime() - startNs);
+                                            double overheadMs = overheadNs / 1_000_000.0;
                                             return ServerResponse.status(HttpStatus.TOO_MANY_REQUESTS)
+                                                    .header("X-Gateway-Overhead-Ms", String.format(java.util.Locale.US, "%.2f", overheadMs))
                                                     .bodyValue("Rate limit exceeded");
                                         }
                                     })
@@ -105,7 +119,7 @@ public class GatewayApplication {
                                                 .bodyValue("Rate limiter service unavailable");
                                     });
                         });
-            })
-        );
+            });
+        });
     }
 }
