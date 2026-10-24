@@ -40,9 +40,9 @@ flowchart TD
         UpstreamCheck -- "No" --> Standalone200["Return 200 OK<br/>+ X-Gateway-Overhead-Ms"]
 
         RejectQuota --> Return429["Return 429 Too Many Requests<br/>+ X-Gateway-Overhead-Ms<br/>'Rate limit exceeded'"]
-        RedisExec -. "Connection Failure" .-> FailOpenFallback{"Fail-Open Policy?"}
-        FailOpenFallback -. "Fail-Open (Graceful Degradation)" .-> WebClientProxy
-        FailOpenFallback -. "Fail-Closed" .-> Return503["Return 503 Service Unavailable"]
+        RedisExec -. "Connection Failure" .-> ErrorCatch{"onErrorResume Catch"}
+        ErrorCatch -- "Fail-Closed (Production)" --> Return503["Return 503 Service Unavailable<br/>'Rate limiter service unavailable'"]
+        ErrorCatch -. "Fail-Open (Optional Roadmap Policy)" .-> WebClientProxy
     end
 
     Return401 --> ClientResponse(["Downstream Client Response"])
@@ -59,6 +59,6 @@ flowchart TD
 
     class Filter,TokenParser,RateService,WebClientProxy primary;
     class Client200,Standalone200 success;
-    class Return429,FailOpenFallback warning;
+    class Return429,ErrorCatch warning;
     class Return401,Return503 danger;
     class RedisKey,UpstreamLLM storage;

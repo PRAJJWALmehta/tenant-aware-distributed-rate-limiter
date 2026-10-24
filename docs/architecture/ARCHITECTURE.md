@@ -105,9 +105,9 @@ flowchart TD
         UpstreamCheck -- "No" --> Standalone200["Return 200 OK<br/>+ X-Gateway-Overhead-Ms"]
 
         RejectQuota --> Return429["Return 429 Too Many Requests<br/>+ X-Gateway-Overhead-Ms<br/>'Rate limit exceeded'"]
-        RedisExec -. "Connection Failure" .-> FailOpenFallback{"Fail-Open Policy?"}
-        FailOpenFallback -. "Fail-Open (Graceful Degradation)" .-> WebClientProxy
-        FailOpenFallback -. "Fail-Closed" .-> Return503["Return 503 Service Unavailable"]
+        RedisExec -. "Connection Failure" .-> ErrorCatch{"onErrorResume Catch"}
+        ErrorCatch -- "Fail-Closed (Production)" --> Return503["Return 503 Service Unavailable<br/>'Rate limiter service unavailable'"]
+        ErrorCatch -. "Fail-Open (Optional Roadmap Policy)" .-> WebClientProxy
     end
 
     Return401 --> ClientResponse(["Downstream Client Response"])
@@ -124,7 +124,7 @@ flowchart TD
 
     class Filter,TokenParser,RateService,WebClientProxy primary;
     class Client200,Standalone200 success;
-    class Return429,FailOpenFallback warning;
+    class Return429,ErrorCatch warning;
     class Return401,Return503 danger;
     class RedisKey,UpstreamLLM storage;
 ```
@@ -146,8 +146,9 @@ flowchart TD
 ### 3.2. `TokenEstimator` (Streaming In-Memory Lexer)
 - **Interface:** Non-blocking service utilizing Jackson Streaming API (`JsonFactory` and `JsonParser`).
 - **Parsing Strategy:**
-  - Ingests incoming request bytes as an input stream.
-  - Traverses JSON tokens at the root object level without constructing an object tree.
+  - Ingests incoming request bytes via non-blocking WebFlux buffers (`request.bodyToMono(byte[].class)`).
+  - Passes the raw byte array directly to `JSON_FACTORY.createParser(payload)` without constructing an intermediate DOM object tree.
+  - Traverses JSON tokens sequentially at the root object level.
   - Matches `"max_tokens"` numeric scalar values immediately.
   - If `"prompt"` is encountered, extracts the string reference.
   - Uses `parser.skipChildren()` for any nested object or array tokens, skipping extraneous payload structures (such as nested message histories or tools definitions) in constant time.
@@ -239,9 +240,9 @@ sequenceDiagram
     TF-->>Client: 401 Unauthorized (Pipeline halted immediately; 0 memory parsing, 0 Redis queries)
     end
 
-    %% Sequence 4: Redis Connection Failure (Fail-Open Path)
-    rect rgb(225, 245, 254)
-    Note over Client, Upstream: Sequence 4: Redis Connection Failure (Graceful Degradation / Fail-Open)
+    %% Sequence 4: Redis Connection Failure (Production Fail-Closed Defense)
+    rect rgb(255, 235, 238)
+    Note over Client, Upstream: Sequence 4: Redis Connection Failure (Production Fail-Closed Defense)
     Client->>TF: POST /v1/chat/completions (X-Tenant-Id: tenant-c, max_tokens: 30)
     TF->>TF: Extract X-Tenant-Id header ('tenant-c')
     TF->>GW: Forward exchange with Context(tenantId = 'tenant-c')
@@ -251,12 +252,10 @@ sequenceDiagram
     RLS->>Redis: EVALSHA token_bucket.lua
     Redis--xRLS: RedisConnectionException / Network Timeout
     RLS-->>GW: Mono.error(RedisConnectionException)
-    GW->>GW: Fallback: Fail-Open Resilience Circuit
-    Note over GW: Log WARN: Redis cluster degraded. Failing open to protect upstream availability.
-    GW->>Upstream: WebClient.POST /v1/chat/completions (proxy upstream)
-    Upstream-->>GW: 200 OK ({"choices": [...]})
-    GW->>GW: Attach X-Gateway-Overhead-Ms + X-RateLimit-Degraded: true
-    GW-->>Client: 200 OK + LLM Response Body + Degraded Telemetry Header
+    GW->>GW: Catch in onErrorResume (GatewayApplication:116)
+    Note over GW: Log ERROR: Rate limit check failed for tenant tenant-c.<br/>Fail-Closed policy prevents unbudgeted upstream token spend.
+    GW-->>Client: 503 Service Unavailable ("Rate limiter service unavailable")
+    Note over Client, Upstream: (Configurable Fail-Open policy can be enabled for availability-prioritized tiers)
     end
 ```
 
@@ -391,9 +390,12 @@ Request 10k ┘   Threads never block; handles 100,000+ open connections with ~6
 ┌────────────────────────────────┬───────────────────────────────────────────────────────┐
 │ Failure Mode / Condition       │ System Mitigation Strategy                            │
 ├────────────────────────────────┼───────────────────────────────────────────────────────┤
-│ Redis Outage / Network Timeout │ Graceful Fail-Open: Logs warning, attaches degraded   │
-│                                │ telemetry header, and proxies traffic to prevent      │
-│                                │ gateway from cascading into an upstream outage.       │
+│ Redis Outage / Network Timeout │ Production Fail-Closed Defense: Catches error in      │
+│                                │ onErrorResume, logs ERROR, and returns HTTP 503       │
+│                                │ Service Unavailable. Protects upstream LLM APIs from  │
+│                                │ unbounded token burn and financial runaway when quota │
+│                                │ storage is degraded. (Configurable Fail-Open strategy │
+│                                │ available for availability-first enterprise tiers).   │
 ├────────────────────────────────┼───────────────────────────────────────────────────────┤
 │ Malformed / Truncated JSON     │ Immediate 400 Bad Request at TokenEstimator stage,   │
 │                                │ avoiding unnecessary Redis quota reservations.        │
@@ -415,8 +417,10 @@ Request 10k ┘   Threads never block; handles 100,000+ open connections with ~6
 ## 7. Performance & Latency Telemetry Verification
 
 During empirical k6 load testing on an 8-core Apple M2 Silicon host (see [`docs/BENCHMARKS.md`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/BENCHMARKS.md) for full benchmark outputs):
-- **Throughput Sustained:** **2,002 RPS** across concurrent tenants.
-- **Gateway Overhead (p50):** **1.15 ms**.
-- **Gateway Overhead (p95):** **3.42 ms** (Satisfies the < 5.0 ms SLA target).
-- **Gateway Overhead (p99):** **4.88 ms** (Zero SLA breaches).
-- **Throttling Accuracy:** 100.00% assertion pass rate for HTTP 429 status code returns on saturated tenants with zero token bucket leakage.
+- **Sustained Throughput:** **2,002.31 req/s** sustained across concurrent nominal and saturated tenants (121,180 total requests executed over 60s).
+- **Network / Transport Errors:** **0 (0.00%)**.
+- **Throttling & Isolation Accuracy:** **100.00%** assertion pass rate across all nominal, burst, and noisy-neighbor scenarios.
+- **Gateway Overhead (p50):** **0.40 ms (400 µs)** (Strictly passes the < 2.00 ms tiered SLO).
+- **Gateway Overhead (p90):** **1.62 ms**.
+- **Gateway Overhead (p95):** **2.24 ms** (Strictly passes the < 5.00 ms SLA target).
+- **Gateway Overhead (p99):** **4.21 ms** (Strictly passes the < 15.00 ms tail SLA target with zero breaches).

@@ -27,9 +27,9 @@ The system SHALL provide comprehensive sequence diagrams in `docs/architecture/d
 - **WHEN** a request arrives without `X-Tenant-Id` and IP fallback is disabled (`ratelimiter.fallback.ip.enabled=false`)
 - **THEN** the sequence diagram illustrates rejection at `TenantFilter` with HTTP 401 Unauthorized without invoking `TokenEstimator` or Redis.
 
-#### Scenario: Redis failure fail-open sequence flow
+#### Scenario: Redis failure handling sequence flow
 - **WHEN** Redis is unreachable or returns a connection timeout during rate limit evaluation
-- **THEN** the sequence diagram illustrates reactive fallback handling where the gateway logs a warning, fails open to prevent outage cascades, proxies the request to upstream LLM service, and returns HTTP 200 OK with degraded status telemetry.
+- **THEN** the sequence diagram illustrates reactive error handling where the gateway logs the failure and enforces a Fail-Closed response returning HTTP 503 Service Unavailable ("Rate limiter service unavailable") to prevent unbudgeted upstream spend, while documenting configurable Fail-Open alternatives.
 
 ### Requirement: Comprehensive architectural deep-dive documentation
 The system SHALL provide a technical architecture document in `docs/architecture/ARCHITECTURE.md` analyzing the system design, reactive threading model, state management, and SDE-2 engineering trade-offs.

@@ -51,9 +51,9 @@ sequenceDiagram
     TF-->>Client: 401 Unauthorized (Pipeline halted immediately; 0 memory parsing, 0 Redis queries)
     end
 
-    %% Sequence 4: Redis Connection Failure (Fail-Open Path)
-    rect rgb(225, 245, 254)
-    Note over Client, Upstream: Sequence 4: Redis Connection Failure (Graceful Degradation / Fail-Open)
+    %% Sequence 4: Redis Connection Failure (Production Fail-Closed Path)
+    rect rgb(255, 235, 238)
+    Note over Client, Upstream: Sequence 4: Redis Connection Failure (Production Fail-Closed Defense)
     Client->>TF: POST /v1/chat/completions (X-Tenant-Id: tenant-c, max_tokens: 30)
     TF->>TF: Extract X-Tenant-Id header ('tenant-c')
     TF->>GW: Forward exchange with Context(tenantId = 'tenant-c')
@@ -63,10 +63,8 @@ sequenceDiagram
     RLS->>Redis: EVALSHA token_bucket.lua
     Redis--xRLS: RedisConnectionException / Network Timeout
     RLS-->>GW: Mono.error(RedisConnectionException)
-    GW->>GW: Fallback: Fail-Open Resilience Circuit
-    Note over GW: Log WARN: Redis cluster degraded. Failing open to protect upstream availability.
-    GW->>Upstream: WebClient.POST /v1/chat/completions (proxy upstream)
-    Upstream-->>GW: 200 OK ({"choices": [...]})
-    GW->>GW: Attach X-Gateway-Overhead-Ms + X-RateLimit-Degraded: true
-    GW-->>Client: 200 OK + LLM Response Body + Degraded Telemetry Header
+    GW->>GW: Catch in onErrorResume (GatewayApplication:116)
+    Note over GW: Log ERROR: Rate limit check failed for tenant tenant-c.<br/>Fail-Closed policy prevents unbudgeted upstream token spend.
+    GW-->>Client: 503 Service Unavailable ("Rate limiter service unavailable")
+    Note over Client, Upstream: (Configurable Fail-Open policy can be enabled for availability-prioritized tiers)
     end
