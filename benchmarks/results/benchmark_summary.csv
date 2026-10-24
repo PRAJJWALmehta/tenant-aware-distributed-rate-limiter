@@ -1,0 +1,7 @@
+Metric,Count / Rate,p50 (ms),p90 (ms),p95 (ms),p99 (ms),Avg (ms),Max (ms)
+Total HTTP Requests,125218 (2065.19 req/s),-,-,-,-,-,-
+Gateway Overhead (<5ms SLA),-,6.83,19.13,27.36,0,9.57,220.06
+Nominal Traffic Latency,100.0% 200 OK,36.83,49.13,57.36,0,39.57,250.06
+Tenant B (Isolated),100.0% 200 OK,35.71,42.95,54.88,0,37.59,64.46
+Tenant A (Noisy Saturated),100.0% 429 Blocked,2.62,6.5,8.91,0,3.68,218.8
+Single-Tenant Saturation,100.0% 429 Blocked,2.71,6.6,9.01,0,3.74,219.91
