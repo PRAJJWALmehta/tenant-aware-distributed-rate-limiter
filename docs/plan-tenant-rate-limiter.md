@@ -272,7 +272,7 @@ git commit -m "docs: add system architecture diagrams and deep dive documentatio
 - Create: `docs/interview-talking-points.md`
 - Create: `README.md`
 
-- [ ] **Step 1: Write automated 60-second interactive demo script**
+- [x] **Step 1: Write automated 60-second interactive demo script**
 
 Create `scripts/demo.sh` with colored terminal output:
 1. Health check verification (`GET /health`)
@@ -282,12 +282,12 @@ Create `scripts/demo.sh` with colored terminal output:
 5. DDoS IP fallback toggle demonstration (401 Unauthorized)
 6. Graceful degradation / fail-open demonstration
 
-- [ ] **Step 2: Run demo script to verify all steps pass**
+- [x] **Step 2: Run demo script to verify all steps pass**
 
 Run: `bash scripts/demo.sh`
 Expected: Clean terminal output demonstrating all 6 stages without errors.
 
-- [ ] **Step 3: Create flagship `README.md` in repository root**
+- [x] **Step 3: Create flagship `README.md` in repository root**
 
 Include:
 - Project title, badges, and high-impact elevator pitch
@@ -298,14 +298,14 @@ Include:
 - Quickstart Guide (`docker compose up -d` + curl examples)
 - Configuration Reference table
 
-- [ ] **Step 4: Write `docs/interview-talking-points.md`**
+- [x] **Step 4: Write `docs/interview-talking-points.md`**
 
 Create structured cheat-sheet for SDE-2 interviews:
 - 5-minute Gate 1 live demo walkthrough script
 - 8 tough interviewer probing questions & model answers (e.g., "Why not use Envoy or Kong?", "How do you handle clock drift in Redis?", "What happens if a prompt length estimation is inaccurate?")
 - Quantified resume bullet points ready for Phase 2 (Nov 23).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md docs/interview-talking-points.md scripts/demo.sh
