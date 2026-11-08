@@ -5,6 +5,7 @@
 ---
 
 ### Architectural & Deployment Iterations
+- [ ] **Configurable Resilience Policy (Fail-Closed vs Fail-Open):** Provide an explicit configuration property (`ratelimiter.resilience.fail-open: false`) allowing operations to toggle between strict Fail-Closed defense (budget protection returning 503) and Fail-Open degradation (availability preservation returning 200 with degraded telemetry) during Redis cluster degradation.
 - [ ] **Sidecar Deployment Pattern:** Migrate the Standalone API Gateway to an Envoy/Istio sidecar proxy or custom service mesh filter to integrate natively alongside microservice pods without network hops.
 - [ ] **Bearer Token Identity Extraction:** Extract tenant identity dynamically from the API key inside the `Authorization: Bearer` header, resolving tenant identities via cached Redis hash lookups rather than relying solely on the explicit `X-Tenant-Id` header.
 - [ ] **Adaptive DDoS / Traffic Shedding Circuit Breaker:** Implement an automated governor to disable IP-fallback (`ratelimiter.fallback.ip.enabled: false`) when CPU throttling, severe network queueing, or unauthenticated traffic spikes are detected.
@@ -20,3 +21,12 @@
 - [ ] **Sliding Window Counter Hybrid:** Support bursty tenants by pairing the token bucket with a strict sliding window counter for sub-second spike protection.
 - [ ] **Tiered Tenant Priority (QoS):** Allow high-paying enterprise tenants guaranteed minimum throughput allocation even under extreme global Redis contention.
 - [ ] **Asynchronous True-Up Streaming Reconciliation:** For long-running streaming completions (`stream: true`), listen to upstream chunk terminations and refund/true-up the difference between estimated token usage and actual consumed tokens.
+
+---
+
+### Related Documentation & Architecture Artifacts
+- **System Architecture Deep Dive:** [`docs/architecture/ARCHITECTURE.md`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/architecture/ARCHITECTURE.md)
+- **Request Lifecycle Diagram:** [`docs/architecture/diagrams/request-lifecycle.mermaid`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/architecture/diagrams/request-lifecycle.mermaid)
+- **Sequence Flows Diagram:** [`docs/architecture/diagrams/sequence-flows.mermaid`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/architecture/diagrams/sequence-flows.mermaid)
+- **Performance Benchmarks:** [`docs/BENCHMARKS.md`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/BENCHMARKS.md)
+- **Implementation Plan:** [`docs/plan-tenant-rate-limiter.md`](file:///Users/prajjwalmehta/Development/Personal/tenant-aware-distributed-rate-limiter/docs/plan-tenant-rate-limiter.md)

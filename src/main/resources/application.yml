@@ -16,3 +16,6 @@ ratelimiter:
     capacity: 100
     refill-rate: 10
 
+upstream:
+  url: ${UPSTREAM_URL:}
+

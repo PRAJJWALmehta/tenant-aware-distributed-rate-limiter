@@ -1,0 +1,52 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 1s
+    networks:
+      - rate-limiter-net
+
+  mock-upstream:
+    build:
+      context: ./mock-upstream
+      dockerfile: Dockerfile
+    container_name: mock-upstream
+    ports:
+      - "8081:8081"
+    networks:
+      - rate-limiter-net
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gateway
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATA_REDIS_HOST=redis
+      - UPSTREAM_URL=http://mock-upstream:8081
+    depends_on:
+      redis:
+        condition: service_healthy
+      mock-upstream:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - rate-limiter-net
+
+networks:
+  rate-limiter-net:
+    driver: bridge

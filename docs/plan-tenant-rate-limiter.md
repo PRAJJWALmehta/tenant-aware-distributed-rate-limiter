@@ -146,12 +146,12 @@ Tie the TenantFilter, TokenEstimator, and RateLimitService together in the main 
 - Create: `mock-upstream/server.py`
 - Create: `scripts/verify-docker.sh`
 
-- [ ] **Step 1: Write upstream mock and verification script**
+- [x] **Step 1: Write upstream mock and verification script**
 
 Create `mock-upstream/server.py` using Python `http.server` to return HTTP 200 with `{"choices": [{"text": "Mock LLM response"}]}` and simulated 30ms latency.
 Create `scripts/verify-docker.sh` to automate health check, valid request verification, and 429 rate limit testing against docker containers.
 
-- [ ] **Step 2: Write multi-stage Dockerfile for Gateway & docker-compose.yml**
+- [x] **Step 2: Write multi-stage Dockerfile for Gateway & docker-compose.yml**
 
 Create a multi-stage `Dockerfile`:
 - Stage 1: Build JAR using `maven:3.9.6-eclipse-temurin-21-alpine`
@@ -161,12 +161,12 @@ Create `docker-compose.yml` wiring:
 - `mock-upstream` on port 8081
 - `gateway` on port 8080 (configured with `SPRING_DATA_REDIS_HOST=redis` and `UPSTREAM_URL=http://mock-upstream:8081`)
 
-- [ ] **Step 3: Run docker-compose build and launch services**
+- [x] **Step 3: Run docker-compose build and launch services**
 
 Run: `docker compose up -d --build`
 Expected: Containers `redis`, `mock-upstream`, and `gateway` start in healthy status.
 
-- [ ] **Step 4: Run verification script to confirm end-to-end routing**
+- [x] **Step 4: Run verification script to confirm end-to-end routing**
 
 Run: `bash scripts/verify-docker.sh`
 Expected:
@@ -175,7 +175,7 @@ Expected:
 - Redis key `rate_limit:test-tenant` decremented
 - Repeated requests exceeding budget -> HTTP 429 "Too Many Requests"
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add Dockerfile docker-compose.yml mock-upstream/ scripts/verify-docker.sh
@@ -232,31 +232,31 @@ git commit -m "feat: add k6 load testing suite and performance benchmark report"
 - Create: `docs/architecture/diagrams/request-lifecycle.mermaid`
 - Create: `docs/architecture/diagrams/sequence-flows.mermaid`
 
-- [ ] **Step 1: Draft Mermaid component & request lifecycle diagram**
+- [x] **Step 1: Draft Mermaid component & request lifecycle diagram**
 
 Create `docs/architecture/diagrams/request-lifecycle.mermaid`:
 - Client -> `TenantFilter` (Extract `X-Tenant-Id` / Fallback to IP) -> `TokenEstimator` (Jackson Streaming `max_tokens` / prompt) -> `RateLimitService` (Lettuce Reactive Redis Lua) -> Upstream LLM Router / 429 Handler.
 
-- [ ] **Step 2: Draft Mermaid sequence diagram for request flows**
+- [x] **Step 2: Draft Mermaid sequence diagram for request flows**
 
 Create `docs/architecture/diagrams/sequence-flows.mermaid`:
 - Sequence 1: Happy path (200 OK + token deduction)
 - Sequence 2: Budget exhausted (429 Too Many Requests)
 - Sequence 3: Missing tenant header with IP fallback disabled (401 Unauthorized)
-- Sequence 4: Redis connection failure (Fail-open path)
+- Sequence 4: Redis connection failure (Fail-closed defense / 503 Service Unavailable)
 
-- [ ] **Step 3: Write comprehensive `ARCHITECTURE.md`**
+- [x] **Step 3: Write comprehensive `ARCHITECTURE.md`**
 
 Detail core engineering decisions and SDE-2 trade-offs:
 - *Memory Safety:* Streaming `JsonParser` vs `ObjectMapper.readTree()` (O(1) memory vs O(N) heap allocation).
 - *Atomicity:* Single Redis Lua script vs Distributed Locks / Redlock (eliminating two-phase lock contention and network roundtrips).
 - *Reactive Pipeline:* Spring WebFlux / Reactor Netty event loops vs blocking Servlet threads (100k+ concurrent connections with minimal threads).
 
-- [ ] **Step 4: Verify diagrams and markdown rendering**
+- [x] **Step 4: Verify diagrams and markdown rendering**
 
 Verify all Mermaid syntax blocks render cleanly and match the production codebase.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add docs/architecture/
@@ -272,7 +272,7 @@ git commit -m "docs: add system architecture diagrams and deep dive documentatio
 - Create: `docs/interview-talking-points.md`
 - Create: `README.md`
 
-- [ ] **Step 1: Write automated 60-second interactive demo script**
+- [x] **Step 1: Write automated 60-second interactive demo script**
 
 Create `scripts/demo.sh` with colored terminal output:
 1. Health check verification (`GET /health`)
@@ -282,12 +282,12 @@ Create `scripts/demo.sh` with colored terminal output:
 5. DDoS IP fallback toggle demonstration (401 Unauthorized)
 6. Graceful degradation / fail-open demonstration
 
-- [ ] **Step 2: Run demo script to verify all steps pass**
+- [x] **Step 2: Run demo script to verify all steps pass**
 
 Run: `bash scripts/demo.sh`
 Expected: Clean terminal output demonstrating all 6 stages without errors.
 
-- [ ] **Step 3: Create flagship `README.md` in repository root**
+- [x] **Step 3: Create flagship `README.md` in repository root**
 
 Include:
 - Project title, badges, and high-impact elevator pitch
@@ -298,14 +298,14 @@ Include:
 - Quickstart Guide (`docker compose up -d` + curl examples)
 - Configuration Reference table
 
-- [ ] **Step 4: Write `docs/interview-talking-points.md`**
+- [x] **Step 4: Write `docs/interview-talking-points.md`**
 
 Create structured cheat-sheet for SDE-2 interviews:
 - 5-minute Gate 1 live demo walkthrough script
 - 8 tough interviewer probing questions & model answers (e.g., "Why not use Envoy or Kong?", "How do you handle clock drift in Redis?", "What happens if a prompt length estimation is inaccurate?")
 - Quantified resume bullet points ready for Phase 2 (Nov 23).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add README.md docs/interview-talking-points.md scripts/demo.sh
